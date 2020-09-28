@@ -1,4 +1,6 @@
-# Strainberry -- Automated strain separation of low-complexity metagenomes
+![Strainberry logo](https://github.com/rvicedomini/strainberry/raw/master/images/sberry-logo_590x182.png)
+
+# Automated strain separation of low-complexity metagenomes
 
 WORK IN PROGRESS
 
