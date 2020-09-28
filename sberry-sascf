@@ -5,7 +5,7 @@ CMD_NAME=$(basename "${BASH_SOURCE[0]}")
 SCRIPTS_DIR="${CMD_DIR}"/scripts
 
 # Include common definitions
-source "${CMD_DIR}/locmess-common"
+source "${CMD_DIR}/sberry-common"
 
 FASTA=""
 BAM=""
