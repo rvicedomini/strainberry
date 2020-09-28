@@ -2,6 +2,7 @@
 
 CMD_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)
 CMD_NAME=$(basename "${BASH_SOURCE[0]}")
+CMD_STRING="${BASH_SOURCE[0]} ${@}"
 SCRIPTS_DIR="${CMD_DIR}"/scripts
 
 # Include common definitions
@@ -104,7 +105,7 @@ if ! [[ "${NTHREADS}" =~ ^[0-9]+$ ]] || [ ${NTHREADS} -lt 1 ] ; then
     NTHREADS=1
 fi
 
-print_status "command: ${CMD_NAME} ${@}"
+print_status "running: ${CMD_STRING}"
 
 #####################
 ### PREPROCESSING ###
