@@ -1,0 +1,155 @@
+#!/bin/bash
+
+CMD_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)
+CMD_NAME=$(basename "${BASH_SOURCE[0]}")
+SCRIPTS_DIR="${CMD_DIR}"/scripts
+
+# Include common definitions
+source "${CMD_DIR}/sberry-common"
+
+FASTA=""
+BAM=""
+OUTDIR=""
+NTHREADS=1
+ONT_ARG=""
+PLOIDY=2
+MINQUAL=50
+SNV_MINDENS=0.1
+FREEBAYES_ONLY=false
+REGION_SIZE=50000
+
+function print_usage() {
+    echo -en "\n  USAGE: ${CMD_NAME} [options] -r <input_fasta> -b <input_bam> -o <output_dir>\n"
+    echo -en "\n"
+    echo -en "  MANDATORY OPTIONS:\n
+    -r, --reference <name>\tReference assembly in FASTA format\n
+    -b, --bam <name>\tRead alignment in BAM format\n
+    -o, --output-dir <name>\tOutput directory\n" | column -t -s $'\t'
+    echo -en "\n"
+    echo -en "  OTHER OPTIONS:\n
+    --nanopore\tInput consists of Oxford Nanopore raw reads\n
+    -n, --strains <num>\tNumber of strains to separate\n
+    -q, --qual <num>\tConsider only variants with a minimum QUAL value [${MINQUAL}]\n
+    -s, --snv-dens <float>\tMinimum SNV percentage to consider haplotype blocks [${SNV_MINDENS}]\n
+                          \tIt should be a value in [0,100]\n
+    -t, --threads <num>\tNumber of threads [${NTHREADS}]\n
+    --freebayes\tUse exclusively freebayes with default parameters instead of Longshot\n
+               \tfor variant calling (SLOWER)\n" | column -t -s $'\t'
+    echo -en "\n"
+    echo -en "\n
+    -h, --help\tPrint this help message\n
+    -V, --version\tPrint version\n" | column -t -s $'\t'
+    echo -en "\n"
+
+}
+
+# retrieve provided arguments
+opts="r:b:o:n:q:s:t:hV"
+longopts="reference:,bam:,output-dir:,nanopore,strains:,qual:,snv-dens:,threads:,freebayes,help,version"
+ARGS=$(getopt -o "${opts}" -l "${longopts}" -n "${CMD_NAME}" -- "${@}")
+if [ $? -ne 0 ] || [ $# -eq 0 ]; then # do not change the order of this test!
+    print_usage
+    exit 1
+fi
+eval set -- "${ARGS}"
+
+while [ -n "${1}" ]; do
+    case ${1} in
+        -r|--reference)
+            shift
+            FASTA=${1}
+            ;;
+        -b|--bam)
+            shift
+            BAM=${1}
+            ;;
+        -o|--output-dir)
+            shift
+            OUTDIR=${1}
+            ;;
+        --nanopore)
+            ONT_ARG="--nanopore"
+            ;;
+        -n|--strains)
+            shift
+            PLOIDY=${1}
+            ;;
+        -q|--qual)
+            shift
+            MINQUAL=${1}
+            ;;
+        -s|--snv-dens)
+            shift
+            SNV_MINDENS=${1}
+            ;;
+        -t|--threads)
+            shift
+            NTHREADS=${1}
+            ;;
+        --freebayes)
+            FREEBAYES_ONLY=true
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        -V|--version)
+            print_version
+            exit 0
+            ;;
+    esac
+    shift
+done
+
+# input arguments validation
+
+if [ -z "${FASTA}" ] || [ ! -f ${FASTA} ]; then
+    print_error "-r|--reference file is missing or does not exist"
+    exit 1
+fi
+if [ -z "${BAM}" ] || [ ! -f ${BAM} ]; then
+    print_error "-b|--bam file is missing or does not exist"
+    exit 1
+fi
+if [ -z "${OUTDIR}" ]; then
+    print_error "-o|--out-dir must be specified"
+    exit 1
+fi
+if ! [[ "${NTHREADS}" =~ ^[0-9]+$ ]] || [ ${NTHREADS} -lt 1 ] ; then
+    print_warning "-t|--threads parameter should be a positive integer; the default value of 1 will be used."
+    NTHREADS=1
+fi
+
+print_status "command: ${CMD_NAME} ${@}"
+
+# STEP 1: SNV detection, haplotype phasing, read separation
+FB_ARG=""; if [ "${FREEBAYES_ONLY}" = true ]; then FB_ARG="--freebayes"; fi
+${CMD_DIR}/sberry-variants -r ${FASTA} -b ${BAM} -o ${OUTDIR} -n ${PLOIDY} -q ${MINQUAL} -t ${NTHREADS} ${FB_ARG}
+if [ $? -ne 0 ]; then print_error "sberry-variants command failed"; exit 2; fi
+
+# STEP 1.1: if freebayes option or n > 2 -> run sberry-separate
+if [ ${PLOIDY} -gt 2 ] || [ "${FREEBAYES_ONLY}" = true ]; then 
+    ${CMD_DIR}/sberry-separate \
+        -r "${OUTDIR}"/00-preprocess/reference.fa \
+        -b "${OUTDIR}"/00-preprocess/alignment.bam \
+        -v "${OUTDIR}"/10-variants/variants.filtered.vcf.gz \
+        -o "${OUTDIR}" -n ${PLOIDY} -t ${NTHREADS}
+    if [ $? -ne 0 ]; then print_error "sberry-separate command failed"; exit 2; fi
+fi
+
+# STEP 2: haplotype assembly
+${CMD_DIR}/sberry-assemble \
+    -r "${OUTDIR}"/00-preprocess/reference.fa \
+    -b "${OUTDIR}"/20-separation/tagged \
+    -v "${OUTDIR}"/20-separation/variants.phased.vcf.gz \
+    -o "${OUTDIR}" -t ${NTHREADS} ${ONT_ARG}
+if [ $? -ne 0 ]; then print_error "sberry-assemble command failed"; exit 2; fi
+
+# STEP 3: scaffolding
+${CMD_DIR}/sberry-sascf \
+    -r "${OUTDIR}"/assembly.contigs.fa \
+    -b "${OUTDIR}"/00-preprocess/alignment.bam \
+    -o "${OUTDIR}" -t ${NTHREADS} ${ONT_ARG}
+if [ $? -ne 0 ]; then print_error "sberry-sascf command failed"; exit 2; fi
+
+print_status "Strainberry finished successfully"

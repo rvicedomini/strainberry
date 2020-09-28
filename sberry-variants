@@ -1,0 +1,162 @@
+#!/bin/bash
+
+CMD_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)
+CMD_NAME=$(basename "${BASH_SOURCE[0]}")
+SCRIPTS_DIR="${CMD_DIR}"/scripts
+
+# Include common definitions
+source "${CMD_DIR}/locmess-common"
+
+FASTA=""
+BAM=""
+OUTDIR=""
+NTHREADS=1
+PLOIDY=2
+MINQUAL=50
+FREEBAYES_ONLY=false
+REGION_SIZE=50000
+
+function print_usage() {
+    echo -en "\n  USAGE: ${CMD_NAME} [options] -r <input_fasta> -b <input_bam> -o <output_dir>\n"
+    echo -en "\n"
+    echo -en "  MANDATORY OPTIONS:\n
+    -r, --reference <name>\tReference assembly in FASTA format\n
+    -b, --bam <name>\tRead alignment in BAM format\n
+    -o, --output-dir <name>\tOutput directory\n" | column -t -s $'\t'
+    echo -en "\n"
+    echo -en "  OTHER OPTIONS:\n
+    -n, --strains <num>\tNumber of strains to separate\n
+    -q, --qual <num>\tConsider only variants with a minimum QUAL value (default:${MINQUAL})\n
+    -t, --threads <num>\tNumber of threads (default:${NTHREADS})\n
+    --freebayes\tUse exclusively freebayes with default parameters instead of Longshot\n
+               \tfor variant calling (SLOWER)\n" | column -t -s $'\t'
+    echo -en "\n"
+    echo -en "\n
+    -h, --help\tPrint this help message\n
+    -V, --version\tPrint version\n" | column -t -s $'\t'
+    echo -en "\n"
+
+}
+
+# retrieve provided arguments
+opts="r:b:o:n:q:t:hV"
+longopts="reference:,bam:,output-dir:,strains:,qual:,threads:,freebayes,help,version"
+ARGS=$(getopt -o "${opts}" -l "${longopts}" -n "${CMD_NAME}" -- "${@}")
+if [ $? -ne 0 ] || [ $# -eq 0 ]; then # do not change the order of this test!
+    print_usage
+    exit 1
+fi
+eval set -- "${ARGS}"
+
+while [ -n "${1}" ]; do
+    case ${1} in
+        -r|--reference)
+            shift
+            FASTA=${1}
+            ;;
+        -b|--bam)
+            shift
+            BAM=${1}
+            ;;
+        -o|--output-dir)
+            shift
+            OUTDIR=${1}
+            ;;
+        -n|--strains)
+            shift
+            PLOIDY=${1}
+            ;;
+        -q|--qual)
+            shift
+            MINQUAL=${1}
+            ;;
+        -t|--threads)
+            shift
+            NTHREADS=${1}
+            ;;
+        --freebayes)
+            FREEBAYES_ONLY=true
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        -V|--version)
+            print_version
+            exit 0
+            ;;
+    esac
+    shift
+done
+
+# input arguments validation
+
+if [ -z "${FASTA}" ] || [ ! -f ${FASTA} ]; then
+    print_error "-r|--reference file is missing or does not exist"
+    exit 1
+fi
+if [ -z "${BAM}" ] || [ ! -f ${BAM} ]; then
+    print_error "-b|--bam file is missing or does not exist"
+    exit 1
+fi
+if [ -z "${OUTDIR}" ]; then
+    print_error "-o|--out-dir name cannot be empty"
+    exit 1
+fi
+if ! [[ "${NTHREADS}" =~ ^[0-9]+$ ]] || [ ${NTHREADS} -lt 1 ] ; then
+    print_warning "-t|--threads parameter should be a positive integer; the default value of 1 will be used."
+    NTHREADS=1
+fi
+
+print_status "command: ${CMD_NAME} ${@}"
+
+# preprocessing : create output directory and links to input files
+print_status "preprocessing"
+mkdir -p "${OUTDIR}"/00-preprocess
+ln -fs $(readlink -f "${FASTA}") "${OUTDIR}/00-preprocess/reference.fa" \
+    && samtools faidx "${OUTDIR}/00-preprocess/reference.fa" \
+    && fasta_generate_regions.py "${OUTDIR}/00-preprocess/reference.fa" ${REGION_SIZE} >"${OUTDIR}/00-preprocess/regions.txt"
+ln -fs $(readlink -f "${BAM}") "${OUTDIR}/00-preprocess/alignment.bam" \
+    && samtools index -@ 2 "${OUTDIR}/00-preprocess/alignment.bam"
+
+cd "${OUTDIR}"
+
+# variant calling
+print_status "variant calling"
+mkdir -p 10-variants
+if [ "${FREEBAYES_ONLY}" = true ]; then
+    (freebayes-parallel ./00-preprocess/regions.txt ${NTHREADS} -p ${PLOIDY} -f ./00-preprocess/reference.fa ./00-preprocess/alignment.bam \
+        | python3 "${SCRIPTS_DIR}"/vcf_filter.py -q ${MINQUAL} | bgzip -c >./10-variants/variants.filtered.vcf.gz) 2>./10-variants/freebayes.log
+    tabix -fp vcf ./10-variants/variants.filtered.vcf.gz
+else
+    # find variants and phase them with Longshot+HapCUT2 to separate 2 strains
+    if [ ${PLOIDY} -lt 3 ]; then
+        mkdir -p ./10-variants/vcfs ./20-separation/tagged
+        cut -f1 ./00-preprocess/reference.fa.fai | parallel -j "${NTHREADS}" \
+            longshot --region {} --bam ./00-preprocess/alignment.bam --ref ./00-preprocess/reference.fa \
+            --out ./10-variants/vcfs/{}.vcf --out_bam ./20-separation/tagged/{}.bam --force_overwrite \
+            &>./10-variants/longshot-hc2.log
+        cut -f1 ./00-preprocess/reference.fa.fai | xargs -I contig cat ./10-variants/vcfs/contig.vcf | vcffirstheader | vcfstreamsort | bgzip -c >./10-variants/longshot.vcf.gz
+        rm -r ./10-variants/vcfs
+        cp ./10-variants/longshot.vcf.gz ./20-separation/variants.phased.vcf.gz && tabix -fp vcf ./20-separation/variants.phased.vcf.gz
+        bgzip -dc ./10-variants/longshot.vcf.gz | python3 "${SCRIPTS_DIR}"/vcf_filter.py -q ${MINQUAL} | bgzip -c >./10-variants/variants.filtered.vcf.gz
+        tabix -fp vcf ./10-variants/variants.filtered.vcf.gz
+    # else call Longshot without phasing and freebayes on Longshot variants for separating more than 2 strains
+    else
+        mkdir -p ./10-variants/vcfs
+        cut -f1 ./00-preprocess/reference.fa.fai | parallel -j "${NTHREADS}" \
+            longshot --no_haps --region {} --bam ./00-preprocess/alignment.bam --ref ./00-preprocess/reference.fa \
+            --out ./10-variants/vcfs/{}.vcf --force_overwrite \
+            &>./10-variants/longshot-hc2.log
+        cut -f1 ./00-preprocess/reference.fa.fai | xargs -I contig cat ./10-variants/vcfs/contig.vcf | vcffirstheader | vcfstreamsort | bgzip -c >./10-variants/longshot.vcf.gz
+        rm -r ./10-variants/vcfs
+        bgzip -dc ./10-variants/longshot.vcf.gz | python3 "${SCRIPTS_DIR}"/vcf_filter.py -q ${MINQUAL} | bgzip -c >./10-variants/longshot.filtered.vcf.gz
+        tabix -fp vcf ./10-variants/longshot.filtered.vcf.gz
+        (freebayes-parallel ./00-preprocess/regions.txt ${NTHREADS} -p ${PLOIDY} -@ ./10-variants/longshot.filtered.vcf.gz -l -f ./00-preprocess/reference.fa ./00-preprocess/alignment.bam \
+            | bgzip -c >./10-variants/variants.filtered.vcf.gz) 2>./10-variants/freebayes-p${PLOIDY}.log
+        tabix -fp vcf ./10-variants/variants.filtered.vcf.gz
+    fi
+fi
+
+print_status "sberry-variants completed successfully"
+exit 0

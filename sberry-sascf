@@ -1,0 +1,109 @@
+#!/bin/bash
+
+CMD_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)
+CMD_NAME=$(basename "${BASH_SOURCE[0]}")
+SCRIPTS_DIR="${CMD_DIR}"/scripts
+
+# Include common definitions
+source "${CMD_DIR}/locmess-common"
+
+FASTA=""
+BAM=""
+OUTDIR=""
+NTHREADS=1
+MM2_PRESET="map-pb"
+MIN_MAPQ=40
+
+function print_usage() {
+    echo -en "\n  USAGE: ${CMD_NAME} [options] -f <input_fasta> -b <input_bam> -o <output_dir>\n"
+    echo -en "\n"
+    echo -en "  MANDATORY OPTIONS:\n
+    -r, --reference <path>\tReference assembly in FASTA format\n
+    -b, --bam <path>\tRead alignment in BAM format\n
+    -o, --output-dir <name>\tOutput directory\n" | column -t -s $'\t'
+    echo -en "\n"
+    echo -en "  OTHER OPTIONS:\n
+    --nanopore\tONT reads\n
+    --mapq\tMin MAPQ value to consider an alignment during scaffolding (default:${MIN_MAPQ})\n
+    -t, --threads <num>\tNumber of threads for each hhblits job (default:${NTHREADS})\n
+    -h, --help\tPrint this help message\n
+    -V, --version\tPrint version\n" | column -t -s $'\t'
+    echo -en "\n"
+}
+
+# retrieve provided arguments
+opts="r:b:o:t:hV"
+longopts="reference:,bam:,output-dir:,nanopore,mapq:,threads:,help,version"
+ARGS=$(getopt -o "${opts}" -l "${longopts}" -n "${CMD_NAME}" -- "${@}")
+if [ $? -ne 0 ] || [ $# -eq 0 ]; then # do not change the order of this test!
+    print_usage
+    exit 1
+fi
+eval set -- "${ARGS}"
+
+while [ -n "${1}" ]; do
+    case ${1} in
+        -r|--reference)
+            shift
+            FASTA=${1}
+            ;;
+        -b|--bam)
+            shift
+            BAM=${1}
+            ;;
+        -o|--output-dir)
+            shift
+            OUTDIR=${1}
+            ;;
+        --nanopore)
+            MM2_PRESET="map-ont"
+            ;;
+        --mapq)
+            shift
+            MIN_MAPQ=${1}
+            ;;
+        -t|--threads)
+            shift
+            NTHREADS=${1}
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        -V|--version)
+            print_version
+            exit 0
+            ;;
+    esac
+    shift
+done
+
+if [ -z "${FASTA}" ] || [ ! -f ${FASTA} ]; then print_error "-f|--reference file is missing or does not exist"; exit 1; fi
+if [ -z "${BAM}" ] || [ ! -f ${BAM} ]; then print_error "-b|--bam file is missing or does not exist"; exit 1; fi
+if [ -z "${OUTDIR}" ]; then print_error "-o|--out-dir name cannot be empty"; exit 1; fi
+
+if ! [[ "${NTHREADS}" =~ ^[0-9]+$ ]] || [ ${NTHREADS} -lt 1 ] ; then
+    print_warning "-t|--threads parameter should be a positive integer; the default value of 1 will be used."
+    NTHREADS=1
+fi
+
+print_status "command: ${CMD_NAME} ${@}"
+
+FASTA=$(abspath "${FASTA}")
+BAM=$(abspath "${BAM}")
+
+mkdir -p "${OUTDIR}" && cd "${OUTDIR}"
+mkdir -p 50-sascf
+
+print_status "aligning reads to contigs"
+if ! [ -f ./50-sascf/alignments.paf.gz ]; then
+    samtools fastq ${BAM} | minimap2 -cx ${MM2_PRESET} --eqx -t ${NTHREADS} -2 ${FASTA} - | gzip -c >./50-sascf/alignments.paf.gz
+fi
+
+print_status "scaffolding"
+python3 ${SCRIPTS_DIR}/sascf.py --paf ./50-sascf/alignments.paf.gz --ref ${FASTA} --prefix ./50-sascf/scaffolds --min-mapq ${MIN_MAPQ}
+cp ./50-sascf/scaffolds.fa ./assembly.sascf.fa
+
+print_status "sberry-sascf completed successfully"
+exit 0
+

@@ -1,0 +1,154 @@
+#!/bin/bash
+
+CMD_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)
+CMD_NAME=$(basename "${BASH_SOURCE[0]}")
+SCRIPTS_DIR="${CMD_DIR}"/scripts
+
+# Include common definitions
+source "${CMD_DIR}/locmess-common"
+
+FASTA=""
+BAM=""
+VCF=""
+OUTDIR=""
+NTHREADS=1
+PLOIDY=2
+WH_MINOVERLAP=2
+WH_SENS=4
+
+function print_usage() {
+    echo -en "\n  USAGE: ${CMD_NAME} [options] -r <fasta> -b <bam> --vcf <bgzipped_vcf> -o <output_dir>\n"
+    echo -en "\n"
+    echo -en "  MANDATORY OPTIONS:\n
+    -r, --reference <path>\tReference assembly in FASTA format\n
+    -b, --bam <path>\tRead alignment in BAM format\n
+    -v, --vcf <path>\tbgzipped-VCF file of variants\n
+    -o, --output-dir <name>\tOutput directory\n" | column -t -s $'\t'
+    echo -en "\n"
+    echo -en "  OTHER OPTIONS:\n
+    -n, --strains <int>\tNumber of strains to separate (default:${PLOIDY})\n
+    -t, --threads <num>\tNumber of threads (default:${NTHREADS})\n
+    -h, --help\tPrint this help message\n
+    -V, --version\tPrint version\n" | column -t -s $'\t'
+    echo -en "\n"
+    echo -en "  WHATSHAP OPTIONS:\n
+    -m, --min-overlap <int>\tMinimum number of shared variants between reads (default:${WH_MINOVERLAP})\n
+    -B, --block-cut-sensitivity <int>\tSeparation sentitivity (default:${WH_SENS})\n
+                                     \tThis value should be an integer in [0,5]\n" | column -t -s $'\t'
+    echo -en "\n"
+}
+
+# retrieve provided arguments
+opts="r:b:v:o:n:m:B:e:x:t:hV"
+longopts="reference:,bam:,vcf:,output-dir:,strains:,threads:,help,version,min-overlap:,block-cut-sensitivity:"
+ARGS=$(getopt -o "${opts}" -l "${longopts}" -n "${CMD_NAME}" -- "${@}")
+if [ $? -ne 0 ] || [ $# -eq 0 ]; then # do not change the order of this test!
+    print_usage
+    exit 1
+fi
+eval set -- "${ARGS}"
+
+while [ -n "${1}" ]; do
+    case ${1} in
+        -r|--reference)
+            shift
+            FASTA=${1}
+            ;;
+        -b|--bam)
+            shift
+            BAM=${1}
+            ;;
+        -v|--vcf)
+            shift
+            VCF=${1}
+            ;;
+        -o|--output-dir)
+            shift
+            OUTDIR=${1}
+            ;;
+        -n|--strains)
+            shift
+            PLOIDY=${1}
+            ;;
+        -t|--threads)
+            shift
+            NTHREADS=${1}
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        -V|--version)
+            print_version
+            exit 0
+            ;;
+        -m|--min-overlap)
+            shift
+            WH_MINOVERLAP=${1}
+            ;;
+        -B|--block-cut-sensitivity)
+            shift
+            WH_SENS=${1}
+            ;;
+    esac
+    shift
+done
+
+if [ -z "${FASTA}" ] || [ ! -f ${FASTA} ]; then print_error "-r|--reference file is missing or does not exist"; exit 1; fi
+if [ -z "${BAM}" ] || [ ! -f ${BAM} ]; then print_error "-b|--bam file is missing or does not exist"; exit 1; fi
+if [ -z "${VCF}" ] || [ ! -f ${VCF} ]; then print_error "-v|--vcf file is missing or does not exist"; exit 1; fi
+if [ -z "${OUTDIR}" ]; then print_error "-o|--out-dir name cannot be empty"; exit 1; fi
+
+if ! [[ "${NTHREADS}" =~ ^[0-9]+$ ]] || [ ${NTHREADS} -lt 1 ] ; then
+    print_warning "-t|--threads parameter should be a positive integer; the default value of 1 will be used."
+    NTHREADS=1
+fi
+
+print_status "command: ${CMD_NAME} ${@}"
+
+#####################
+### PREPROCESSING ###
+#####################
+
+FASTA=$(abspath ${FASTA})
+BAM=$(abspath ${BAM})
+VCF=$(abspath ${VCF})
+
+mkdir -p "${OUTDIR}" && cd "${OUTDIR}"
+
+print_status "splitting VCF by contig name"
+rm -rf ./20-separation/vcfs && mkdir -p ./20-separation/vcfs
+tabix -l "${VCF}" >./20-separation/contigs.vcf.list
+cat ./20-separation/contigs.vcf.list | xargs -I chrom bash -c "tabix -h ${VCF} chrom | bgzip -c >./20-separation/vcfs/chrom.vcf.gz"
+cat ./20-separation/contigs.vcf.list | xargs -I chrom bash -c "tabix -fp vcf ./20-separation/vcfs/chrom.vcf.gz"
+
+########################
+### WHATSHAP PHASING ###
+########################
+
+print_status "running whatshap polyphase"
+rm -rf ./20-separation/polyphase && mkdir -p ./20-separation/polyphase
+cat ./20-separation/contigs.vcf.list | parallel -j "${NTHREADS}" --joblog ./20-separation/whatshap-polyphase.joblog \
+    ~/software/whatshap-haplotag/bin/whatshap polyphase \
+    --ignore-read-groups --min-overlap "${WH_MINOVERLAP}" -B "${WH_SENS}" -p "${PLOIDY}" \
+    --reference "${FASTA}" --chromosome {} \
+    -o ./20-separation/polyphase/{}.vcf.gz ./20-separation/vcfs/{}.vcf.gz "${BAM}" \
+    &>./20-separation/whatshap-polyphase.log
+if [ $? -ne 0 ]; then print_error "whatshap polyphase did not terminate successfully for all contigs"; exit 2; fi
+
+print_status "aggregating phased contigs"
+# TODO do the following only if contig has been phased (i.e., the file exists)
+cat ./20-separation/contigs.vcf.list | xargs -I contig zcat ./20-separation/polyphase/contig.vcf.gz | vcffirstheader | bgzip -c >./20-separation/variants.phased.vcf.gz
+tabix -f -p vcf ./20-separation/variants.phased.vcf.gz
+
+print_status "tagging reads"
+rm -rf ./20-separation/tagged && mkdir -p ./20-separation/tagged
+~/software/whatshap-haplotag/bin/whatshap haplotag \
+    --ignore-read-groups --reference "${FASTA}" --ploidy "${PLOIDY}" \
+    --output-haplotag-list ./20-separation/tagged.list -o ./20-separation/tagged/alignment.tagged.bam \
+    ./20-separation/variants.phased.vcf.gz "${BAM}" \
+    &>./20-separation/whatshap-haplotag.log
+if [ $? -ne 0 ]; then print_error "whatshap haplotag did not terminate successfully"; exit 2; fi
+
+print_status "sberry-separate completed successfully"
+exit 0

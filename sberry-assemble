@@ -1,0 +1,222 @@
+#!/bin/bash
+
+CMD_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)
+CMD_NAME=$(basename "${BASH_SOURCE[0]}")
+SCRIPTS_DIR="${CMD_DIR}"/scripts
+
+# Include common definitions
+source "${CMD_DIR}/locmess-common"
+
+FASTA=""
+BAM=""
+VCF=""
+OUTDIR=""
+NTHREADS=1
+WTDBG_PRESET="-x preset2"
+WTDBG_MINDEPTH=5
+MM2_PRESET="map-pb"
+SNV_MINDENS=0.1
+
+
+function print_usage() {
+    echo -en "\n  USAGE: ${CMD_NAME} [options] -r <fasta> -b <bam> -v <bgzipped_vcf> -o <output_dir>\n"
+    echo -en "\n"
+    echo -en "  MANDATORY OPTIONS:\n
+    -r, --reference <path>\tReference assembly in FASTA format\n
+    -b, --bam-dir <path>\tDirectory of BAM files of tagged reads\n
+    -v, --vcf <path>\tbgzipped-VCF file of phased variants\n
+    -o, --output-dir <name>\tOutput directory\n" | column -t -s $'\t'
+    echo -en "\n"
+    echo -en "  OTHER OPTIONS:\n
+    --nanopore\tONT raw reads\n
+    -s <float>\tMinimum SNV density to assemble a phaseset (default:${SNV_MINDENS})\n
+              \tIt should be a value in [0,100]\n
+    -x <string>\tPreset for wtdbg2 (sequel, nanopore, corrected, etc.)\n
+    -e <num>\tMin read depth of a valid edge(default:${WTDBG_MINDEPTH})\n
+    -t, --threads <num>\tNumber of threads (default:${NTHREADS})\n
+    -h, --help\tPrint this help message\n
+    -V, --version\tPrint version\n" | column -t -s $'\t'
+    echo -en "\n"
+}
+
+# retrieve provided arguments
+opts="r:b:v:o:s:x:e:t:hV"
+longopts="reference:,bam-dir:,vcf:,output-dir:,nanopore,threads:,help,version"
+ARGS=$(getopt -o "${opts}" -l "${longopts}" -n "${CMD_NAME}" -- "${@}")
+if [ $? -ne 0 ] || [ $# -eq 0 ]; then # do not change the order of this test!
+    print_usage
+    exit 1
+fi
+eval set -- "${ARGS}"
+
+while [ -n "${1}" ]; do
+    case ${1} in
+        -r|--reference)
+            shift
+            FASTA=${1}
+            ;;
+        -b|--bam)
+            shift
+            BAM=${1}
+            ;;
+        -v|--vcf)
+            shift
+            VCF=${1}
+            ;;
+        -o|--output-dir)
+            shift
+            OUTDIR=${1}
+            ;;
+        --nanopore)
+            MM2_PRESET="map-ont"
+            ;;
+        -s)
+            shift
+            SNV_MINDENS=${1}
+            ;;
+        -e)
+            shift
+            WTDBG_MINDEPTH=${1}
+            ;;
+        -x)
+            shift
+            WTDBG_PRESET="-x ${1}"
+            ;;
+        -t|--threads)
+            shift
+            NTHREADS=${1}
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        -V|--version)
+            print_version
+            exit 0
+            ;;
+    esac
+    shift
+done
+
+if [ -z "${FASTA}" ] || [ ! -f ${FASTA} ]; then print_error "-r|--reference file is missing or does not exist"; exit 1; fi
+if [ -z "${BAM}" ] || [ ! -d ${BAM} ]; then print_error "-b|--bam-dir directory is missing or does not exist"; exit 1; fi
+if [ -z "${VCF}" ] || [ ! -f ${VCF} ]; then print_error "-v|--vcf file of phased variants is missing or does not exist"; exit 1; fi
+if [ -z "${OUTDIR}" ]; then print_error "-o|--out-dir name cannot be empty"; exit 1; fi
+
+if ! [[ "${NTHREADS}" =~ ^[0-9]+$ ]] || [ ${NTHREADS} -lt 1 ] ; then
+    print_warning "-t|--threads parameter should be a positive integer; the default value of 1 will be used."
+    NTHREADS=1
+fi
+
+print_status "command: ${CMD_NAME} ${@}"
+
+#####################
+### PREPROCESSING ###
+#####################
+
+FASTA=$(abspath ${FASTA})
+BAM=$(abspath ${BAM})
+VCF=$(abspath ${VCF})
+
+mkdir -p "${OUTDIR}" && cd "${OUTDIR}"
+mkdir -p 30-assembly
+
+########################
+### WHATSHAP PHASING ###
+########################
+
+print_status "extracting phasesets"
+python3 "${SCRIPTS_DIR}"/extract_phasesets.py --vcf "${VCF}" -f "${FASTA}" -p ./30-assembly/reference.phasesets
+
+print_status "outputting tagged reads"
+for bam in $(ls -1 ${BAM}); do
+    echo "python3 ${SCRIPTS_DIR}/haplotag_split.py -b ${BAM}/${bam} --outdir ./30-assembly/fasta -f"
+done | parallel -j ${NTHREADS} &>./30-assembly/tagged-split.log
+
+##########################
+### HAPLOTYPE ASSEMBLY ###
+##########################
+
+print_status "running wtdbg2"
+WTDBG_JOBS=${NTHREADS}; if [ ${WTDBG_JOBS} -gt 1 ]; then WTDBG_JOBS=$(( WTDBG_JOBS/2 + 1 )); fi
+mkdir -p ./30-assembly/wtdbg2
+for psid in $(cat ./30-assembly/reference.phasesets.dens.tsv | awk -F $'\t' -v mindens="${SNV_MINDENS}" '$2>=mindens{print $1}'); do
+    for f in $(find ./30-assembly/fasta -maxdepth 1 -name "${psid}_*.fa.gz"); do
+        nreads=$(zcat ${f} | awk '/^>/{count++;if(count>=10){exit}} END{printf("%d",count)}')
+        if [ $nreads -ge 10 ]; then
+            fbase=$(basename ${f})
+            fname=${fbase%.fa.gz}
+            #pslen=$(cat "${OUTDIR}"/reference.phasesets.len.tsv | awk -F $'\t' -v psname="${fname%_*}" '$1==psname{x=1;printf("%d",$2);exit}')
+            mkdir -p ./30-assembly/wtdbg2/"${fname}"
+            echo "gzip -dc ${f} | wtdbg2 ${WTDBG_PRESET} -t 2 -e ${WTDBG_MINDEPTH} -l 1000 -L 3000 -S 1 -R -o ./30-assembly/wtdbg2/${fname}/${fname} -i - &>./30-assembly/wtdbg2/${fname}/${fname}.log"
+        fi
+    done
+done | parallel -j ${WTDBG_JOBS} --joblog ./30-assembly/wtdbg2-assembly.joblog &>/dev/null
+
+print_status "running wtdbg2-cns"
+for f in $(find ./30-assembly/fasta -maxdepth 1 -name '*.fa.gz'); do
+    fbase=$(basename ${f})
+    fname=${fbase%.fa.gz}
+    if [ -s ./30-assembly/wtdbg2/${fname}/${fname}.ctg.lay.gz ]; then
+        insize=$(gzip -l ./30-assembly/wtdbg2/${fname}/${fname}.ctg.lay.gz | awk 'NR==2{printf("%d",$2);exit}')
+        [ $insize -gt 0 ] && echo "wtpoa-cns -t 2 -i ./30-assembly/wtdbg2/${fname}/${fname}.ctg.lay.gz -fo ./30-assembly/wtdbg2/${fname}/${fname}.ctg.fa &>>./30-assembly/wtdbg2/${fname}/${fname}.log"
+    fi
+done | parallel -j ${WTDBG_JOBS} --joblog ./30-assembly/wtdbg2-cns.joblog &>/dev/null
+
+print_status "polishing assemblies"
+for f in $(find ./30-assembly/fasta -maxdepth 1 -name '*.fa.gz'); do
+    fbase=$(basename ${f})
+    fname=${fbase%.fa.gz}
+    if [ -s ./30-assembly/wtdbg2/${fname}/${fname}.ctg.fa ]; then
+        printf '(%s) && (%s)\n' \
+            "minimap2 -t2 -ax ${MM2_PRESET} -r2k ./30-assembly/wtdbg2/${fname}/${fname}.ctg.fa ${f} | samtools sort -@2 >./30-assembly/wtdbg2/${fname}/${fname}.bam" \
+            "samtools view -F0x900 ./30-assembly/wtdbg2/${fname}/${fname}.bam | wtpoa-cns -t 2 -d ./30-assembly/wtdbg2/${fname}/${fname}.ctg.fa -i - -fo ./30-assembly/wtdbg2/${fname}/${fname}.cns.fa"
+    fi
+done | parallel -j ${WTDBG_JOBS} --joblog ./30-assembly/wtdbg2-polish.joblog &>/dev/null
+
+print_status "renaming contigs"
+for f in $(find ./30-assembly/fasta -maxdepth 1 -name '*.fa.gz'); do
+    fbase=$(basename ${f})
+    fname=${fbase%.fa.gz}
+    if [ -s ./30-assembly/wtdbg2/${fname}/${fname}.cns.fa ]; then
+        echo "cat ./30-assembly/wtdbg2/${fname}/${fname}.cns.fa | awk 'BEGIN{i=1} /^>/{\$1=\">${fname}-\"i++;print;next} {print}' >./30-assembly/wtdbg2/${fname}.fa"
+    fi
+done | parallel -j ${NTHREADS} --joblog ./30-assembly/wtdbg2-rename.joblog
+
+print_status "extracting assembled phasesets and not-phased regions from reference"
+for f in $(find ./30-assembly/wtdbg2 -maxdepth 1 -name '*.fa'); do fbase=$(basename ${f}); fname=${fbase%.fa.gz}; printf '%s\n' "${fname%_*}"; done >./30-assembly/contigs.phasesets.wtdbg2.list
+python3 "${SCRIPTS_DIR}"/extract_phasesets.py --vcf "${VCF}" -f "${FASTA}" -l ./30-assembly/contigs.phasesets.wtdbg2.list -p ./30-assembly/contigs.wtdbg2.phasesets
+python3 "${SCRIPTS_DIR}"/extract_phasesets.py --vcf "${VCF}" -f "${FASTA}" -l ./30-assembly/contigs.phasesets.wtdbg2.list --complement --min-length 500 -p "./30-assembly"/contigs.wtdbg2.notphased
+mkdir -p ./30-assembly/phasesets && python3 "${SCRIPTS_DIR}"/fastasplit.py ./30-assembly/contigs.wtdbg2.phasesets.fa ./30-assembly/phasesets/
+
+print_status "trimming assemblies"
+mkdir -p ./30-assembly/wtdbg2ps
+# nucmer alignment of assemblies against reference phaseset
+# TODO: replace with minimap2 ?
+for f in $(find ./30-assembly/wtdbg2 -maxdepth 1 -name '*.fa'); do 
+    fbase=$(basename ${f})
+    fname=${fbase%.fa}
+    psname=${fname%_*}
+    printf '(%s) && (%s)\n' \
+        "nucmer -p ./30-assembly/wtdbg2ps/${fname} ./30-assembly/phasesets/${psname}.fa ${f} 2>/dev/null" \
+        "show-coords -rlcHT <(delta-filter -1 ./30-assembly/wtdbg2ps/${fname}.delta) >./30-assembly/wtdbg2ps/${fname}.1coords"
+done | parallel -j ${NTHREADS}
+# actual trimming according to nucmer mapping
+# TODO: improve the following
+mkdir -p ./30-assembly/trimmed
+for f in $(find ./30-assembly/wtdbg2 -maxdepth 1 -name '*.fa'); do 
+    fbase=$(basename ${f})
+    fname=${fbase%.fa}
+    psname=${fname%_*}
+    printf '(%s) && (%s)\n' \
+        "cat ./30-assembly/wtdbg2ps/${fname}.1coords | awk 'BEGIN{OFS=\"\\t\"} \$3>\$4{tmp=\$3;\$3=\$4;\$4=tmp} !min[\$13]{min[\$13]=\$3;max[\$13]=\$4;next} \$3<min[\$13]{min[\$13]=\$3} \$4>max[\$13]{max[\$13]=\$4} END{for(ctg in min){print ctg,min[ctg]-1,max[ctg]}}' >./30-assembly/wtdbg2ps/${fname}.nuc.bed" \
+        "samtools faidx ${f} && bedtools getfasta -fi ${f} -bed ./30-assembly/wtdbg2ps/${fname}.nuc.bed -fo ./30-assembly/trimmed/${fname}.fa 2>/dev/null"
+done | parallel -j ${NTHREADS}
+
+# aggregate assembled phasesets and not-phased regions
+print_status "collecting trimmed assemblies and not-phased regions"
+find ./30-assembly/trimmed -maxdepth 1 -name '*.fa' | parallel -j ${NTHREADS} -m cat >./30-assembly/contigs.wtdbg2.trimmed.fa
+cat ./30-assembly/contigs.wtdbg2.trimmed.fa ./30-assembly/contigs.wtdbg2.notphased.fa >./assembly.contigs.fa
+
+print_status "sberry-assemble completed successfully"
+exit 0

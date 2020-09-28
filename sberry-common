@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+# Common functions and definitions to be used in ProfileView
+PROG_NAME="Strainberry"
+PROG_VERSION="1.0"
+
+# handle pressed Ctrl-C
+#trap ctrl_c INT TERM ERR; function ctrl_c() { exit 2; }
+#trap kill_and_exit EXIT; function kill_and_exit() { kill 0; }
+
+function abspath() { echo "$(cd "$(dirname "$1")"; pwd -P)/$(basename "$1")"; }
+
+function print_error() { echo "[$(date +"%F %T")] error: ${@}" >&2; }
+function print_warning() { echo "[$(date +"%F %T")] warning: ${@}" >&2; }
+function print_status() { echo "[$(date +"%F %T")] ${@}" >&2; }
+function print_version() { echo "${PROG_NAME} ${PROG_VERSION}"; }
+
+function check_cmds() {
+    cmds=("$@")
+    declare -a notfound
+    for cmd in "${cmds[@]}"; do
+        if ! command -v "${cmd}" >/dev/null 2>&1; then 
+            notfound+=("${cmd}")
+        fi
+    done
+    if [ ${#notfound[@]} -gt 0 ]; then
+        print_error "cannot find the following commands: ${notfound[@]}"
+        exit 1
+    fi
+    return 0
+}
+
+function check_pymodules(){
+    check_cmds "python3"
+    mods=("$@")
+    declare -a notfound
+    for mod in "${mods[@]}"; do
+        if ! python3 -c "import ${mod}" >/dev/null 2>&1; then
+            notfound+=("${mod}")
+        fi
+    done
+    if [ ${#notfound[@]} -gt 0 ]; then
+        print_error "cannot find the following python3 modules: ${notfound[@]}"
+        exit 1
+    fi
+    return 0
+}
+
+function check_files() {
+    files=("$@")
+    declare -a notfound
+    for f in "${files[@]}"; do
+        if [ ! -e "${f}" ]; then notfound+=("${f}"); fi
+    done
+    if [ ${#notfound[@]} -gt 0 ]; then
+        print_error "cannot find the following files:"
+        for f in "${notfound[@]}"; do echo "$f"; done
+        exit 1
+    fi
+    return 0
+}
+
+
