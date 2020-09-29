@@ -29,13 +29,13 @@ function print_usage() {
     echo -en "\n"
     echo -en "  OTHER OPTIONS:\n
     --nanopore\tInput consists of Oxford Nanopore raw reads\n
-    -n, --strains <num>\tNumber of strains to separate\n
+    -n, --strains <num>\tStrain multiplicity [${PLOIDY}]\n
     -q, --qual <num>\tConsider only variants with a minimum QUAL value [${MINQUAL}]\n
     -s, --snv-dens <float>\tMinimum SNV percentage to consider haplotype blocks [${SNV_MINDENS}]\n
                           \tIt should be a value in [0,100]\n
     -t, --threads <num>\tNumber of threads [${NTHREADS}]\n
-    --freebayes\tUse exclusively freebayes with default parameters instead of Longshot\n
-               \tfor variant calling (SLOWER)\n" | column -t -s $'\t'
+    --freebayes\tUse exclusively freebayes with default parameters instead\n
+               \tof Longshot for variant calling (SLOWER)\n" | column -t -s $'\t'
     echo -en "\n"
     echo -en "\n
     -h, --help\tPrint this help message\n
