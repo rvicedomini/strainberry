@@ -20,24 +20,30 @@ FREEBAYES_ONLY=false
 REGION_SIZE=50000
 
 function print_usage() {
-    echo -en "\n  USAGE: ${CMD_NAME} [options] -r <input_fasta> -b <input_bam> -o <output_dir>\n"
     echo -en "\n"
-    echo -en "  MANDATORY OPTIONS:\n
-    -r, --reference <name>\tReference assembly in FASTA format\n
-    -b, --bam <name>\tRead alignment in BAM format\n
+    print_version
+    echo -en "Automated strain separation of low-complexity metagenomes\n"
+    echo -en "\n"
+    echo -en "  USAGE:
+    ${CMD_NAME} [options] -r <FASTA> -b <BAM> -o <OUTPUT_DIR>\n"
+    echo -en "\n"
+    echo -en "  MANDATORY OPTIONS:
+    -r, --reference <name>\tInput (strain-oblivious) assembly in FASTA format
+    -b, --bam <name>\tInput read alignment in BAM format
+                    \t(at least a 60X coverage is recommended)
     -o, --output-dir <name>\tOutput directory\n" | column -t -s $'\t'
     echo -en "\n"
-    echo -en "  OTHER OPTIONS:\n
-    --nanopore\tInput consists of Oxford Nanopore raw reads\n
-    -n, --strains <num>\tStrain multiplicity [${PLOIDY}]\n
-    -q, --qual <num>\tConsider only variants with a minimum QUAL value [${MINQUAL}]\n
-    -s, --snv-dens <float>\tMinimum SNV percentage to consider haplotype blocks [${SNV_MINDENS}]\n
-                          \tIt should be a value in [0,100]\n
-    -t, --threads <num>\tNumber of threads [${NTHREADS}]\n
-    --freebayes\tUse exclusively freebayes with default parameters instead\n
+    echo -en "  OTHER OPTIONS:
+    --nanopore\tInput consists of Oxford Nanopore raw reads
+    -n, --strains <num>\tStrain multiplicity [${PLOIDY}]
+    -q, --qual <num>\tConsider only variants with a minimum QUAL value [${MINQUAL}]
+    -s, --snv-dens <float>\tMinimum SNV percentage to consider haplotype blocks [${SNV_MINDENS}]
+                          \tIt should be a value in [0,100]
+    -t, --threads <num>\tNumber of threads [${NTHREADS}]
+    --freebayes\tUse exclusively freebayes with default parameters instead
                \tof Longshot for variant calling (SLOWER)\n" | column -t -s $'\t'
     echo -en "\n"
-    echo -en "\n
+    echo -en "
     -h, --help\tPrint this help message\n
     -V, --version\tPrint version\n" | column -t -s $'\t'
     echo -en "\n"
