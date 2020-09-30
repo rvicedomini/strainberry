@@ -1,8 +1,10 @@
 ![Strainberry logo](https://github.com/rvicedomini/strainberry/raw/master/images/sberry-logo_590x142.png)
 
-## Automated strain separation of low-complexity metagenomes
+# Automated strain separation of low-complexity metagenomes
 
-## System requirements
+Write somwthing here...
+
+# System requirements
 
 + Strainberry has been developed and tested under a Linux environment
 + The bash shell should be installed
