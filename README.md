@@ -14,7 +14,7 @@ achieve single-sample assembly of strains with higher quality than other state-o
 
 ### Installation
 
-The recommended way to install Strainberry is through an isolated environment built with conda (*e.g.*, sberry):
+The recommended way to install Strainberry is through an isolated environment built with conda (*e.g.*, named sberry):
 ```
 git clone https://github.com/rvicedomini/strainberry.git
 cd strainberry
