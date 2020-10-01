@@ -401,7 +401,6 @@ def main( argv = None ):
             is_reflink=(afrag,bfrag) in psAdjSet|fragAdjSet
             is_singlink=(a in asmContigs and len(refEnds[bref])==1) or (b in asmContigs and len(refEnds[aref])==1)
             is_endlink=(afrag in refEnds[aref] and bfrag in refEnds[bref])
-            #if (afrag,bfrag) in psAdjSet|fragAdjSet or afrag in refEnds[aref] or bfrag in refEnds[bref]:
             if is_reflink or is_singlink or is_endlink:
                 if not asmGraph.has_edge(a,b):
                     asmGraph.add_edge(a,b,nreads=0,etype={a:atype,b:btype},label="0",overlaps=[],color="black") # TODO: assuming no self-loops or loops of size 2, fix that
