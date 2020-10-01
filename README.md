@@ -2,7 +2,9 @@
 
 # Automated strain separation of low-complexity metagenomes
 
-Write somwthing here...
+Strainberry is a method that performs strain separation in low-complexity metagenomes using error-prone long-read technologies. 
+It exploits state-of-the-art tools for variant calling, haplotype phasing, and genome assembly, in order to
+achieve single-sample assembly of strains with higher quality than other state-of-the-art long-read assemblers.
 
 # System requirements
 
@@ -12,7 +14,7 @@ Write somwthing here...
 
 ### Installation
 
-The recommended way to install Strainberry is through an isolated environment built with conda (__e.g.__, sberry):
+The recommended way to install Strainberry is through an isolated environment built with conda (*e.g.*, sberry):
 ```
 git clone https://github.com/rvicedomini/strainberry.git
 cd strainberry
