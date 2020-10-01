@@ -160,7 +160,7 @@ for f in $(find ./30-assembly/fasta -maxdepth 1 -name '*.fa.gz'); do
     fname=${fbase%.fa.gz}
     if [ -s ./30-assembly/wtdbg2/${fname}/${fname}.ctg.lay.gz ]; then
         insize=$(gzip -l ./30-assembly/wtdbg2/${fname}/${fname}.ctg.lay.gz | awk 'NR==2{printf("%d",$2);exit}')
-        [ $insize -gt 0 ] && echo "wtpoa-cns -t 2 -i ./30-assembly/wtdbg2/${fname}/${fname}.ctg.lay.gz -fo ./30-assembly/wtdbg2/${fname}/${fname}.ctg.fa &>>./30-assembly/wtdbg2/${fname}/${fname}.log"
+        [ "${insize}" -gt 0 ] && echo "wtpoa-cns -t 2 -i ./30-assembly/wtdbg2/${fname}/${fname}.ctg.lay.gz -fo ./30-assembly/wtdbg2/${fname}/${fname}.ctg.fa &>>./30-assembly/wtdbg2/${fname}/${fname}.log"
     fi
 done | parallel -j ${WTDBG_JOBS} --joblog ./30-assembly/wtdbg2-cns.joblog &>/dev/null
 
