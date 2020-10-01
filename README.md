@@ -6,7 +6,7 @@ Strainberry is a method that performs strain separation in low-complexity metage
 It exploits state-of-the-art tools for variant calling, haplotype phasing, and genome assembly, in order to
 achieve single-sample assembly of strains with higher quality than other state-of-the-art long-read assemblers.
 
-# System requirements
+## System requirements
 
 + Strainberry has been developed and tested under a Linux environment
 + The bash shell should be installed
@@ -26,7 +26,7 @@ It is advised to include Strainberry directory in your PATH environment variable
 export PATH=/path/to/strainberry:${PATH}
 ```
 
-# Usage
+## Usage
 
 Activate the conda environment:
 ```
@@ -74,21 +74,3 @@ Automated strain separation of low-complexity metagenomes
     -V, --version  Print version
 ```
 
-##
-
-### conda packages
-- Python 3.7+
-- wtdbg2
-- GNU parallel
-- vcflib
-- longshot
-- freebayes
-- whatshap polyploid (polyploid-haplotag branch)
-- minimap2
-- mummer4
-
-### python modules
-- biopython
-- pysam
-- networkx
-- pygraphviz
