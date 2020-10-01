@@ -130,7 +130,7 @@ cat ./20-separation/contigs.vcf.list | xargs -I chrom bash -c "tabix -fp vcf ./2
 print_status "running whatshap polyphase"
 rm -rf ./20-separation/polyphase && mkdir -p ./20-separation/polyphase
 cat ./20-separation/contigs.vcf.list | parallel -j "${NTHREADS}" --joblog ./20-separation/whatshap-polyphase.joblog \
-    ~/software/whatshap-haplotag/bin/whatshap polyphase \
+    whatshap polyphase \
     --ignore-read-groups --min-overlap "${WH_MINOVERLAP}" -B "${WH_SENS}" -p "${PLOIDY}" \
     --reference "${FASTA}" --chromosome {} \
     -o ./20-separation/polyphase/{}.vcf.gz ./20-separation/vcfs/{}.vcf.gz "${BAM}" \
@@ -144,7 +144,7 @@ tabix -f -p vcf ./20-separation/variants.phased.vcf.gz
 
 print_status "tagging reads"
 rm -rf ./20-separation/tagged && mkdir -p ./20-separation/tagged
-~/software/whatshap-haplotag/bin/whatshap haplotag \
+whatshap haplotag \
     --ignore-read-groups --reference "${FASTA}" --ploidy "${PLOIDY}" \
     --output-haplotag-list ./20-separation/tagged.list -o ./20-separation/tagged/alignment.tagged.bam \
     ./20-separation/variants.phased.vcf.gz "${BAM}" \
@@ -153,3 +153,4 @@ if [ $? -ne 0 ]; then print_error "whatshap haplotag did not terminate successfu
 
 print_status "sberry-separate completed successfully"
 exit 0
+
