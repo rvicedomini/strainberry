@@ -103,7 +103,7 @@ fi
 
 print_status "scaffolding"
 python3 ${SCRIPTS_DIR}/sascf.py --paf ./50-sascf/alignments.paf.gz --ref ${FASTA} --prefix ./50-sascf/scaffolds --min-mapq ${MIN_MAPQ} &>./50-sascf/sascf.log
-cp ./50-sascf/scaffolds.fa ./assembly.sascf.fa
+cp ./50-sascf/scaffolds.fa ./assembly.scaffolds.fa
 
 print_status "sberry-sascf completed successfully"
 exit 0
