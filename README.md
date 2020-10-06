@@ -37,7 +37,8 @@ Running Strainberry:
 ```
 $ strainberry [options] -r <FASTA> -b <BAM> -o <OUTPUT_DIR>
 ```
-where `<FASTA>` is a (strain-oblivious) metagenome assembly and `<BAM>` is a read alignment sorted by coordinate. 
+where `<FASTA>` is a *strain-oblivious* metagenome assembly (*e.g.*, generated with metaFlye) 
+and `<BAM>` is a *coordinate-sorted* alignment of long reads in BAM format. 
 Strainberry separated sequences will be stored in `<OUTPUT_DIR>/assembly.{contigs,scaffolds}.fa`
 
 After Strainberry execution the conda environment can be deactivated:
