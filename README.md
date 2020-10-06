@@ -37,11 +37,23 @@ Running Strainberry:
 ```
 $ strainberry [options] -r <FASTA> -b <BAM> -o <OUTPUT_DIR>
 ```
+where `<FASTA>` is a (strain-oblivious) metagenome assembly and `<BAM>` is a read alignment sorted by coordinate. 
+Strainberry separated sequences will be stored in `<OUTPUT_DIR>/assembly.{contigs,scaffolds}.fa`
 
 After Strainberry execution the conda environment can be deactivated:
 ```
 $ conda deactivate sberry
 ```
+
+### Test dataset
+
+In order to verify that Strainberry works properly, it is possible to run it on a small dataset in the `example` sub-directory:
+```
+$ cd example
+$ strainberry -r ecoli.fa -b ecoli.sorted.bam -o sberry_out -t 4
+```
+Strainberry should take around 5-10 minutes to finish.
+In the `sberry_out` output directory, both `assembly.contigs.fa` and `assembly.scaffolds.fa` FASTA files should contain two sequences.
 
 ### Command line options
 
@@ -55,8 +67,8 @@ Automated strain separation of low-complexity metagenomes
     strainberry [options] -r <FASTA> -b <BAM> -o <OUTPUT_DIR>
 
   MANDATORY OPTIONS:         
-    -r, --reference <name>   Input (strain-oblivious) assembly in FASTA format
-    -b, --bam <name>         Input read alignment in BAM format
+    -r, --reference <name>   Strain-oblivious assembly in FASTA format
+    -b, --bam <name>         Coordinate-sorted read alignment in BAM format
                              (at least a 60X coverage is recommended)
     -o, --output-dir <name>  Output directory
 
