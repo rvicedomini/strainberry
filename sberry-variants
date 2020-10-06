@@ -128,6 +128,7 @@ mkdir -p 10-variants
 if [ "${FREEBAYES_ONLY}" = true ]; then
     (freebayes-parallel ./00-preprocess/regions.txt ${NTHREADS} -p ${PLOIDY} -f ./00-preprocess/reference.fa ./00-preprocess/alignment.bam \
         | python3 "${SCRIPTS_DIR}"/vcf_filter.py -q ${MINQUAL} | bgzip -c >./10-variants/variants.filtered.vcf.gz) 2>./10-variants/freebayes.log
+    if [ $? -ne 0 ]; then print_error "error running freebayes, log file: ${OUTDIR}/10-variants/freebayes.log"; exit 2; fi
     tabix -fp vcf ./10-variants/variants.filtered.vcf.gz
 else
     # find variants and phase them with Longshot+HapCUT2 to separate 2 strains
@@ -137,6 +138,7 @@ else
             longshot --region {} --bam ./00-preprocess/alignment.bam --ref ./00-preprocess/reference.fa \
             --out ./10-variants/vcfs/{}.vcf --out_bam ./20-separation/tagged/{}.bam --force_overwrite \
             &>./10-variants/longshot-hc2.log
+        if [ $? -ne 0 ]; then print_error "error running longshot, log file: ${OUTDIR}/10-variants/longshot-hc2.log"; exit 2; fi
         cut -f1 ./00-preprocess/reference.fa.fai | xargs -I contig cat ./10-variants/vcfs/contig.vcf | vcffirstheader | vcfstreamsort | bgzip -c >./10-variants/longshot.vcf.gz
         rm -r ./10-variants/vcfs
         cp ./10-variants/longshot.vcf.gz ./20-separation/variants.phased.vcf.gz && tabix -fp vcf ./20-separation/variants.phased.vcf.gz
@@ -149,12 +151,14 @@ else
             longshot --no_haps --region {} --bam ./00-preprocess/alignment.bam --ref ./00-preprocess/reference.fa \
             --out ./10-variants/vcfs/{}.vcf --force_overwrite \
             &>./10-variants/longshot-hc2.log
+        if [ $? -ne 0 ]; then print_error "error running longshot, log file: ${OUTDIR}/10-variants/longshot-hc2.log"; exit 2; fi
         cut -f1 ./00-preprocess/reference.fa.fai | xargs -I contig cat ./10-variants/vcfs/contig.vcf | vcffirstheader | vcfstreamsort | bgzip -c >./10-variants/longshot.vcf.gz
         rm -r ./10-variants/vcfs
         bgzip -dc ./10-variants/longshot.vcf.gz | python3 "${SCRIPTS_DIR}"/vcf_filter.py -q ${MINQUAL} | bgzip -c >./10-variants/longshot.filtered.vcf.gz
         tabix -fp vcf ./10-variants/longshot.filtered.vcf.gz
         (freebayes-parallel ./00-preprocess/regions.txt ${NTHREADS} -p ${PLOIDY} -@ ./10-variants/longshot.filtered.vcf.gz -l -f ./00-preprocess/reference.fa ./00-preprocess/alignment.bam \
             | bgzip -c >./10-variants/variants.filtered.vcf.gz) 2>./10-variants/freebayes-p${PLOIDY}.log
+        if [ $? -ne 0 ]; then print_error "error running freebayes, log file: ${OUTDIR}/10-variants/freebayes-p${PLOIDY}.log"; exit 2; fi
         tabix -fp vcf ./10-variants/variants.filtered.vcf.gz
     fi
 fi

@@ -182,7 +182,7 @@ for f in $(find ./30-assembly/fasta -maxdepth 1 -name '*.fa.gz'); do
     if [ -s ./30-assembly/wtdbg2/${fname}/${fname}.cns.fa ]; then
         echo "cat ./30-assembly/wtdbg2/${fname}/${fname}.cns.fa | awk 'BEGIN{i=1} /^>/{\$1=\">sberry|${fname}_\"i++;print;next} {print}' >./30-assembly/wtdbg2/${fname}.fa"
     fi
-done | parallel -j ${NTHREADS} --joblog ./30-assembly/wtdbg2-rename.joblog
+done | parallel -j ${NTHREADS} --joblog ./30-assembly/wtdbg2-rename.joblog 2>./30-assembly/wtdbg2-rename.log
 
 print_status "extracting assembled phasesets and not-phased regions from reference"
 for f in $(find ./30-assembly/wtdbg2 -maxdepth 1 -name '*.fa'); do fbase=$(basename ${f}); fname=${fbase%.fa.gz}; printf '%s\n' "${fname%_*}"; done >./30-assembly/contigs.phasesets.wtdbg2.list
@@ -202,7 +202,7 @@ for f in $(find ./30-assembly/wtdbg2 -maxdepth 1 -name '*.fa'); do
     printf '(%s) && (%s)\n' \
         "nucmer -p ./30-assembly/wtdbg2ps/${fname} ./30-assembly/phasesets/${psname}.fa ${f} 2>/dev/null" \
         "show-coords -rlcHT <(delta-filter -1 ./30-assembly/wtdbg2ps/${fname}.delta) >./30-assembly/wtdbg2ps/${fname}.1coords"
-done | parallel -j ${NTHREADS}
+done | parallel -j ${NTHREADS} 2>./30-assembly/trimmming.log
 # actual trimming according to nucmer mapping
 # TODO: improve the following
 mkdir -p ./30-assembly/trimmed
@@ -213,11 +213,11 @@ for f in $(find ./30-assembly/wtdbg2 -maxdepth 1 -name '*.fa'); do
     printf '(%s) && (%s)\n' \
         "cat ./30-assembly/wtdbg2ps/${fname}.1coords | awk 'BEGIN{OFS=\"\\t\"} \$3>\$4{tmp=\$3;\$3=\$4;\$4=tmp} !min[\$13]{min[\$13]=\$3;max[\$13]=\$4;next} \$3<min[\$13]{min[\$13]=\$3} \$4>max[\$13]{max[\$13]=\$4} END{for(ctg in min){print ctg,min[ctg]-1,max[ctg]}}' >./30-assembly/wtdbg2ps/${fname}.nuc.bed" \
         "samtools faidx ${f} && bedtools getfasta -fi ${f} -bed ./30-assembly/wtdbg2ps/${fname}.nuc.bed -fo ./30-assembly/trimmed/${fname}.fa 2>/dev/null"
-done | parallel -j ${NTHREADS}
+done | parallel -j ${NTHREADS} 2>>./30-assembly/trimming.log
 
 # aggregate assembled phasesets and not-phased regions
 print_status "collecting trimmed assemblies and not-phased regions"
-find ./30-assembly/trimmed -maxdepth 1 -name '*.fa' | parallel -j ${NTHREADS} -m cat >./30-assembly/contigs.wtdbg2.trimmed.fa
+find ./30-assembly/trimmed -maxdepth 1 -name '*.fa' | parallel -j ${NTHREADS} -m cat >./30-assembly/contigs.wtdbg2.trimmed.fa 2>/dev/null
 cat ./30-assembly/contigs.wtdbg2.trimmed.fa ./30-assembly/contigs.wtdbg2.notphased.fa | cut -f1 -d: >./assembly.contigs.fa
 
 print_status "sberry-assemble completed successfully"
