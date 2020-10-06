@@ -180,15 +180,16 @@ for f in $(find ./30-assembly/fasta -maxdepth 1 -name '*.fa.gz'); do
     fbase=$(basename ${f})
     fname=${fbase%.fa.gz}
     if [ -s ./30-assembly/wtdbg2/${fname}/${fname}.cns.fa ]; then
-        echo "cat ./30-assembly/wtdbg2/${fname}/${fname}.cns.fa | awk 'BEGIN{i=1} /^>/{\$1=\">${fname}-\"i++;print;next} {print}' >./30-assembly/wtdbg2/${fname}.fa"
+        echo "cat ./30-assembly/wtdbg2/${fname}/${fname}.cns.fa | awk 'BEGIN{i=1} /^>/{\$1=\">sberry|${fname}_\"i++;print;next} {print}' >./30-assembly/wtdbg2/${fname}.fa"
     fi
 done | parallel -j ${NTHREADS} --joblog ./30-assembly/wtdbg2-rename.joblog
 
 print_status "extracting assembled phasesets and not-phased regions from reference"
 for f in $(find ./30-assembly/wtdbg2 -maxdepth 1 -name '*.fa'); do fbase=$(basename ${f}); fname=${fbase%.fa.gz}; printf '%s\n' "${fname%_*}"; done >./30-assembly/contigs.phasesets.wtdbg2.list
-python3 "${SCRIPTS_DIR}"/extract_phasesets.py --vcf "${VCF}" -f "${FASTA}" -l ./30-assembly/contigs.phasesets.wtdbg2.list -p ./30-assembly/contigs.wtdbg2.phasesets
+python3 "${SCRIPTS_DIR}"/extract_phasesets.py --vcf "${VCF}" -f "${FASTA}" -l ./30-assembly/contigs.phasesets.wtdbg2.list -p ./30-assembly/contigs.wtdbg2.phasesets \
+    && mkdir -p ./30-assembly/phasesets \
+    && python3 "${SCRIPTS_DIR}"/fastasplit.py ./30-assembly/contigs.wtdbg2.phasesets.fa ./30-assembly/phasesets/
 python3 "${SCRIPTS_DIR}"/extract_phasesets.py --vcf "${VCF}" -f "${FASTA}" -l ./30-assembly/contigs.phasesets.wtdbg2.list --complement --min-length 500 -p "./30-assembly"/contigs.wtdbg2.notphased
-mkdir -p ./30-assembly/phasesets && python3 "${SCRIPTS_DIR}"/fastasplit.py ./30-assembly/contigs.wtdbg2.phasesets.fa ./30-assembly/phasesets/
 
 print_status "trimming assemblies"
 mkdir -p ./30-assembly/wtdbg2ps
@@ -217,7 +218,8 @@ done | parallel -j ${NTHREADS}
 # aggregate assembled phasesets and not-phased regions
 print_status "collecting trimmed assemblies and not-phased regions"
 find ./30-assembly/trimmed -maxdepth 1 -name '*.fa' | parallel -j ${NTHREADS} -m cat >./30-assembly/contigs.wtdbg2.trimmed.fa
-cat ./30-assembly/contigs.wtdbg2.trimmed.fa ./30-assembly/contigs.wtdbg2.notphased.fa >./assembly.contigs.fa
+cat ./30-assembly/contigs.wtdbg2.trimmed.fa ./30-assembly/contigs.wtdbg2.notphased.fa | cut -f1 -d: >./assembly.contigs.fa
 
 print_status "sberry-assemble completed successfully"
 exit 0
+

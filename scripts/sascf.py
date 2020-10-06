@@ -246,23 +246,12 @@ def estimate_n50(asmGraph):
             return pl
     return pl
 
-def write_gfa(graph,outfile):
-    with open(outfile,'w') as of:
-        of.write('H\tVN:Z:1.0\n')
-        for n,ndata in graph.nodes(data=True):
-            segment_name=n.replace('-','_') # TODO: handle better node names (mapping to integers?)
-            of.write(f'S\t{segment_name}\t*\tLN:i:{ndata["length"]}\n')
-        for e, edata in graph.edges.items():
-            u,v=e
-            nreads=edata['nreads']
-            of.write(f'L\t{u}\t+\t{v}\t+\t0M\tRC:i:{nreads}\n')
-
 
 def getRefPos(ctgname):
-    if ':' not in ctgname:
+    if not ctgname.startswith("sberry|"):
         refid,pos=ctgname.rsplit('_',1)
         return (refid,int(pos))
-    refid,pos,_=ctgname.rsplit(':',1)[0].rsplit('_',2)
+    refid,pos,_,_=ctgname.split('|',1)[1].rsplit('_',3)
     return (refid,int(pos))
 
 
@@ -293,8 +282,8 @@ def main( argv = None ):
     # retrieve identifiers and put not-phased/assembled contigs in two different sets
     ctgSeq={ ctg.id:str(ctg.seq) for ctg in SeqIO.parse(opt.refFile,'fasta') }
     ctgDict={ ctg_id:len(ctg_seq) for ctg_id,ctg_seq in ctgSeq.items() }
-    npContigs={ ctg:ctglen for ctg,ctglen in ctgDict.items() if ':' not in ctg }
-    asmContigs={ ctg:ctglen for ctg,ctglen in ctgDict.items() if ':' in ctg }
+    npContigs={ ctg:ctglen for ctg,ctglen in ctgDict.items() if not ctg.startswith('sberry|') }
+    asmContigs={ ctg:ctglen for ctg,ctglen in ctgDict.items() if ctg.startswith('sberry|') }
 
     psDict=defaultdict(list)
     psAdjSet=set()
@@ -424,11 +413,9 @@ def main( argv = None ):
     nx.nx_agraph.to_agraph(asmGraph).write(f'{opt.outPrefix}.raw.dot')
     
     asmGraph=remove_simple_transitive_edges(asmGraph,asmContigs,npContigs)
-    #asmGraph=fix_neighbors(asmGraph)
     nx.nx_agraph.to_agraph(asmGraph).write(f'{opt.outPrefix}.simplified.dot')
     
     asmGraph=remove_weak_edges(asmGraph,opt.minReads,opt.minReadFrac)
-    #asmGraph=fix_neighbors(asmGraph)
     nx.nx_agraph.to_agraph(asmGraph).write(f'{opt.outPrefix}.final.dot')
     
     eprint(f'connected-components: {len(list(nx.connected_components(asmGraph)))}')
@@ -440,9 +427,6 @@ def main( argv = None ):
             of.write(f'>scaffold_{i}\n')
             of.write(f'{insert_newlines(scaff)}\n')
 
-    # output assembly graphs
-    #write_gfa(asmGraph,f'{opt.outPrefix}.gfa')
-    
     return 0
 
 
