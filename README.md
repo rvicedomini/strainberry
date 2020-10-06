@@ -54,7 +54,7 @@ $ cd example
 $ strainberry -r ecoli.fa -b ecoli.sorted.bam -o sberry_out -t 4
 ```
 Strainberry should take around 5 minutes to finish. The input is a small fragment of a consensus *E. coli* sequence.
-In the `sberry_out` output directory, both `assembly.contigs.fa` and `assembly.scaffolds.fa` FASTA files should contain two sequences
+In the `sberry_out` output directory, both `assembly.contigs.fa` and `assembly.scaffolds.fa` files should contain two sequences
 (one closer to strain K12, the other closer to strain W).
 
 ### Command line options
