@@ -54,7 +54,7 @@ Strainberry output sequences are be stored in `<OUTPUT_DIR>`
 
 After Strainberry execution the conda environment can be deactivated:
 ```
-$ conda deactivate sberry
+$ conda deactivate
 ```
 
 ## Output
