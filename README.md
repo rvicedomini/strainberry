@@ -51,7 +51,7 @@ Strainberry output sequences will be stored in `<OUTPUT_DIR>/assembly.{contigs,s
 
 After Strainberry execution the conda environment can be deactivated:
 ```
-$ conda deactivate sberry
+$ conda deactivate
 ```
 
 ### Test dataset
