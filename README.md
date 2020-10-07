@@ -46,7 +46,7 @@ $ strainberry [options] -r <FASTA> -b <BAM> -o <OUTPUT_DIR>
 ```
 where `<FASTA>` is a *strain-oblivious* metagenome assembly (*e.g.*, generated with metaFlye) 
 and `<BAM>` is a *coordinate-sorted* alignment of long reads in BAM format. 
-Strainberry output sequences will be stored in `<OUTPUT_DIR>/assembly.{contigs,scaffolds}.fa`
+Strainberry output sequences are be stored in `<OUTPUT_DIR>`
 
 After Strainberry execution the conda environment can be deactivated:
 ```
@@ -55,10 +55,11 @@ $ conda deactivate sberry
 
 ## Output
 
-The output of Strainberry is  `assembly.contigs.fa` and `assembly.scaffolds.fa`. As usual, the contigs assembly is more conservative and the scaffolds assembly is more contiguous. Headers are of the form:
+The output of Strainberry is  `assembly.contigs.fa` and `assembly.scaffolds.fa`. 
+As usual, the contigs assembly is more conservative while the scaffolds assembly is more contiguous. Headers are of the form:
 
 ```
->sberry|contig_[number]_[len]_[??]_h[haplotype]_[???]
+>sberry|[reference-name]_[phaseset-id]_h[haplotype]_[contig-index]
 ```
 
 ### Test dataset
