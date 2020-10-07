@@ -8,9 +8,13 @@ achieve single-sample assembly of strains with higher quality than other state-o
 
 ## System requirements
 
-+ Strainberry has been developed and tested under a Linux environment
-+ The bash shell should be installed
-+ To easily install Strainberry dependencies, [miniconda3](https://conda.io/en/latest/miniconda.html) is strongly recommended
+Strainberry has been developed and tested under a Linux environment.
+It requires certain packages/tools in order to be installed/used: 
++ The bash shell
++ [miniconda3](https://conda.io/en/latest/miniconda.html)
++ Standard development packages:
+    - Debian/Ubuntu: `build-essential` and `python3-dev`
+    - RedHat/CentOS/Fedora: `gcc`, `gcc-c++`, `glibc-devel`, `make`, and `python3-devel`
 
 ## Installation
 
@@ -21,7 +25,7 @@ cd strainberry
 conda env create -n sberry --file environment.yml
 ```
 
-It is also advised to include Strainberry directory in your PATH environment variable by adding the following line to your `~/.bashrc` file:
+To make the `strainberry` command available, it is advised to include the absolute path of Strainberry's directory in your PATH environment variable by adding the following line to your `~/.bashrc` file:
 ```
 export PATH=/path/to/strainberry:${PATH}
 ```
