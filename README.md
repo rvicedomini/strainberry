@@ -26,6 +26,14 @@ It is advised to include Strainberry directory in your PATH environment variable
 export PATH=/path/to/strainberry:${PATH}
 ```
 
+## Updating to latest version
+
+``` 
+cd strainberry
+git pull
+conda env update -n sberry --file environment.yml
+```
+
 ## Usage
 
 Activate the conda environment:
