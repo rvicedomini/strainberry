@@ -33,7 +33,6 @@ cd strainberry
 git pull
 conda env update -n sberry --file environment.yml
 ```
-
 ## Usage
 
 Activate the conda environment:
@@ -47,11 +46,20 @@ $ strainberry [options] -r <FASTA> -b <BAM> -o <OUTPUT_DIR>
 ```
 where `<FASTA>` is a *strain-oblivious* metagenome assembly (*e.g.*, generated with metaFlye) 
 and `<BAM>` is a *coordinate-sorted* alignment of long reads in BAM format. 
-Strainberry output sequences will be stored in `<OUTPUT_DIR>/assembly.{contigs,scaffolds}.fa`
+Strainberry output sequences are be stored in `<OUTPUT_DIR>`
 
 After Strainberry execution the conda environment can be deactivated:
 ```
-$ conda deactivate
+$ conda deactivate sberry
+```
+
+## Output
+
+The output of Strainberry is  `assembly.contigs.fa` and `assembly.scaffolds.fa`. 
+As usual, the contigs assembly is more conservative while the scaffolds assembly is more contiguous. Headers are of the form:
+
+```
+>sberry|[reference-name]_[phaseset-id]_h[haplotype]_[contig-index]
 ```
 
 ### Test dataset
@@ -64,6 +72,7 @@ $ strainberry -r ecoli.fa -b ecoli.sorted.bam -o sberry_out -t 4
 Strainberry should take around 5 minutes to finish. The input is a small fragment of a consensus *E. coli* sequence.
 In the `sberry_out` output directory, both `assembly.contigs.fa` and `assembly.scaffolds.fa` files should contain two sequences
 (one closer to strain K12, the other closer to strain W).
+
 
 ### Command line options
 
