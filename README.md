@@ -12,7 +12,7 @@ achieve single-sample assembly of strains with higher quality than other state-o
 + The bash shell should be installed
 + To easily install Strainberry dependencies, [miniconda3](https://conda.io/en/latest/miniconda.html) is strongly recommended
 
-### Installation
+## Installation
 
 The recommended way to install Strainberry is through an isolated environment built with conda (*e.g.*, named sberry):
 ```
