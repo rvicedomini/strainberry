@@ -14,14 +14,14 @@ achieve single-sample assembly of strains with higher quality than other state-o
 
 ## Installation
 
-The recommended way to install Strainberry is through an isolated environment built with conda (*e.g.*, named sberry):
+The simplest (and recommended) way to install Strainberry dependencies is by creating an isolated conda environment (*e.g.*, named sberry):
 ```
 git clone https://github.com/rvicedomini/strainberry.git
 cd strainberry
 conda env create -n sberry --file environment.yml
 ```
 
-It is advised to include Strainberry directory in your PATH environment variable by adding the following line to your `~/.bashrc` file:
+It is also advised to include Strainberry directory in your PATH environment variable by adding the following line to your `~/.bashrc` file:
 ```
 export PATH=/path/to/strainberry:${PATH}
 ```
@@ -55,12 +55,25 @@ $ conda deactivate sberry
 
 ## Output
 
-The output of Strainberry is  `assembly.contigs.fa` and `assembly.scaffolds.fa`. 
-As usual, the contigs assembly is more conservative while the scaffolds assembly is more contiguous. Headers are of the form:
-
+The output directory of Strainberry has the following structure:
+```
+OUTPUT_DIR/
+├── 00-preprocess/
+├── 10-variants/
+├── 20-separation/
+├── 30-assembly/
+├── 50-sascf/
+├── assembly.contigs.fa
+└── assembly.scaffolds.fa
+```
+Strainberry output assemblies are stored in the `assembly.contigs.fa` and `assembly.scaffolds.fa` files.
+As usual, the contigs assembly is more conservative while the scaffolds assembly is more contiguous. 
+In the contig assembly headers are of the form:
 ```
 >sberry|[reference-name]_[phaseset-id]_h[haplotype]_[contig-index]
 ```
+All the other sub-directories in Strainberry's output contain intermediate results and log files.
+Therefore, after a successful run of Strainberry, they could be deleted.
 
 ### Test dataset
 
@@ -74,7 +87,7 @@ In the `sberry_out` output directory, both `assembly.contigs.fa` and `assembly.s
 (one closer to strain K12, the other closer to strain W).
 
 
-### Command line options
+## Command line options
 
 ```
 $ strainberry --help
