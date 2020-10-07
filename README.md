@@ -26,7 +26,7 @@ It is advised to include Strainberry directory in your PATH environment variable
 export PATH=/path/to/strainberry:${PATH}
 ```
 
-## Updating to latest version
+### Updating to latest version
 
 ``` 
 cd strainberry
