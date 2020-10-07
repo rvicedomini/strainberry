@@ -27,7 +27,7 @@ conda env create -n sberry --file environment.yml
 
 To make the `strainberry` command available, it is advised to include the absolute path of Strainberry's directory in your PATH environment variable by adding the following line to your `~/.bashrc` file:
 ```
-export PATH=/path/to/strainberry:${PATH}
+export PATH=/absolute/path/to/strainberry:${PATH}
 ```
 
 ### Updating to latest version
