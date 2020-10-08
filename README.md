@@ -108,10 +108,10 @@ Assuming these tools are available, it is possible to run the following commands
 ```
 cd example
 $ flye --meta --pacbio-raw reads.fq.gz --out-dir flye_out --genome-size 300k --threads 12
-$ minimap2 -ax map-pb -t 12 -2 ./flye_out/assembly.fasta reads.fq.gz | samtools sort >flye_out/alignment.sorted.bam
+$ minimap2 -ax map-pb -t 12 ./flye_out/assembly.fasta reads.fq.gz | samtools sort >./flye_out/alignment.sorted.bam
 ```
 
-where `--genome-size` is an estimate of the metagenome.
+where `--genome-size` provides an estimate of the metagenome to metaFlye.
 The assembly and read alignment are then available in the `flye_out` directory as `assembly.fasta` and `alignment.sorted.bam` respectively.
 
 ### Running Strainberry
