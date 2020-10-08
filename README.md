@@ -114,7 +114,7 @@ $ minimap2 -ax map-pb -t 12 -2 ./flye_out/assembly.fasta reads.fq.gz | samtools 
 where `--genome-size` is an estimate of the metagenome.
 The assembly and read alignment are then available in the `flye_out` directory as `assembly.fasta` and `alignment.sorted.bam` respectively.
 
-### Running Strainberry on a small strain-oblivious assembly
+### Running Strainberry
 Given the provided `assembly.fasta` and `alignment.sorted.bam` files, it is possible to run Strainberry as follows:
 
 ```
