@@ -6,6 +6,13 @@ Strainberry is a method that performs strain separation in low-complexity metage
 It exploits state-of-the-art tools for variant calling, haplotype phasing, and genome assembly, in order to
 achieve single-sample assembly of strains with higher quality than other state-of-the-art long-read assemblers.
 
++ [System requirements](#system-requirements)
++ [Installation](#installation)
++ [Usage](#usage)
++ [Output files](#output-files)
++ [Example](#example)
++ [Command-line options](#command-line-options)
+
 ## System requirements
 
 Strainberry has been developed and tested under a Linux environment.
@@ -19,6 +26,7 @@ It requires certain packages/tools in order to be installed/used:
 ## Installation
 
 The simplest (and recommended) way to install Strainberry dependencies is by creating an isolated conda environment (*e.g.*, named sberry):
+
 ```
 git clone https://github.com/rvicedomini/strainberry.git
 cd strainberry
@@ -26,6 +34,7 @@ conda env create -n sberry --file environment.yml
 ```
 
 To make the `strainberry` command available, it is advised to include the absolute path of Strainberry's directory in your PATH environment variable by adding the following line to your `~/.bashrc` file:
+
 ```
 export PATH=/absolute/path/to/strainberry:${PATH}
 ```
@@ -37,29 +46,35 @@ cd strainberry
 git pull
 conda env update -n sberry --file environment.yml
 ```
+
 ## Usage
 
 Activate the conda environment:
+
 ```
 $ conda activate sberry
 ```
 
 Running Strainberry:
+
 ```
 $ strainberry [options] -r <FASTA> -b <BAM> -o <OUTPUT_DIR>
 ```
+
 where `<FASTA>` is a *strain-oblivious* metagenome assembly (*e.g.*, generated with metaFlye) 
 and `<BAM>` is a *coordinate-sorted* alignment of long reads in BAM format. 
 Strainberry output sequences are be stored in `<OUTPUT_DIR>`
 
 After Strainberry execution the conda environment can be deactivated:
+
 ```
 $ conda deactivate
 ```
 
-## Output
+## Output files
 
 The output directory of Strainberry has the following structure:
+
 ```
 OUTPUT_DIR/
 ├── 00-preprocess/
@@ -70,12 +85,15 @@ OUTPUT_DIR/
 ├── assembly.contigs.fa
 └── assembly.scaffolds.fa
 ```
+
 Strainberry output assemblies are stored in the `assembly.contigs.fa` and `assembly.scaffolds.fa` files.
 As usual, the contigs assembly is more conservative while the scaffolds assembly is more contiguous. 
 In the contig assembly headers are of the form:
+
 ```
 >sberry|[reference-name]_[phaseset-id]_h[haplotype]_[contig-index]
 ```
+
 All the other sub-directories in Strainberry's output contain intermediate results and log files.
 Therefore, after a successful run of Strainberry, they could be deleted.
 
@@ -86,20 +104,24 @@ In order to verify that Strainberry works properly, it is possible to run it on 
 ### Generating the input from the reads
 In order to generate a strain-oblivious assembly and a read alignment, we recommend to use metaFlye, minimap2, and samtools.
 Assuming that these tools are available, it is possible to run the following commands, using 12 threads:
+
 ```
 cd example
 $ flye --meta --pacbio-raw reads.fq.gz --out-dir flye_out --genome-size 300k --threads 12
 $ minimap2 -ax map-pb -t 12 -2 ./flye_out/assembly.fasta reads.fq.gz | samtools sort >flye_out/alignment.sorted.bam
 ```
+
 where `--genome-size` is an estimate of the metagenome.
 The assembly and read alignment are then available in the `flye_out` directory as `assembly.fasta` and `alignment.sorted.bam` respectively.
 
 ### Running Strainberry on a small strain-oblivious assembly
 Given the provided `assembly.fasta` and `alignment.sorted.bam` files, it is possible to run Strainberry as follows:
+
 ```
 $ cd example
 $ strainberry -r assembly.fasta -b alignment.sorted.bam -o sberry_out -t 4
 ```
+
 Strainberry should take around 5 minutes to finish. The file `assembly.fasta` contains a single sequence which is a consensus of a small region of *E. coli* strains K12 and W.
 After a successful run of Strainberry, in the `sberry_out` directory, the file `assembly.scaffolds.fa` should contain two scaffolds (one closer to strain K12, the other closer to strain W).
 
