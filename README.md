@@ -83,15 +83,21 @@ Therefore, after a successful run of Strainberry, they could be deleted.
 
 In order to verify that Strainberry works properly, it is possible to run it on a small dataset in the `example` sub-directory.
 
-### Generating the input from the reads (optional)
-In order to generate the input assembly and read alignment, it is possible to use the following commands (metaFlye, minimap2, and samtools are required):
+### Generating the input from the reads
+In order to generate a strain-oblivious assembly and a read alignment, we recommend to use metaFlye, minimap2, and samtools.
+Assuming that these tools are available, it is possible to run the following commands, using 12 threads:
 ```
+cd example
 $ flye --meta --pacbio-raw reads.fq.gz --out-dir flye_out --genome-size 300k --threads 12
-$ minimap2 -ax map-pb -t 12 -2 flye/assembly.fasta reads.fq.gz | samtools sort --threads 8 >flye_out/alignment.sorted.bam
+$ minimap2 -ax map-pb -t 12 -2 ./flye_out/assembly.fasta reads.fq.gz | samtools sort >flye_out/alignment.sorted.bam
 ```
+where `--genome-size` is an estimate of the metagenome.
+The assembly and read alignment are then available in the `flye_out` directory as `assembly.fasta` and `alignment.sorted.bam` respectively.
+
 ### Running Strainberry on a small strain-oblivious assembly
-Given the `assembly.fasta` and `alignment.sorted.bam` available (or generated with the previous commands), it is possible to run Strainberry as follows:
+Given the provided `assembly.fasta` and `alignment.sorted.bam` files, it is possible to run Strainberry as follows:
 ```
+$ cd example
 $ strainberry -r assembly.fasta -b alignment.sorted.bam -o sberry_out -t 4
 ```
 Strainberry should take around 5 minutes to finish. The file `assembly.fasta` contains a single sequence which is a consensus of a small region of *E. coli* strains K12 and W.
