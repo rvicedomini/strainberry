@@ -79,16 +79,23 @@ In the contig assembly headers are of the form:
 All the other sub-directories in Strainberry's output contain intermediate results and log files.
 Therefore, after a successful run of Strainberry, they could be deleted.
 
-### Test dataset
+## Example
 
-In order to verify that Strainberry works properly, it is possible to run it on a small dataset in the `example` sub-directory:
+In order to verify that Strainberry works properly, it is possible to run it on a small dataset in the `example` sub-directory.
+
+### Generating the input from the reads (optional)
+In order to generate the input assembly and read alignment, it is possible to use the following commands (metaFlye, minimap2, and samtools are required):
 ```
-$ cd example
-$ strainberry -r ecoli.fa -b ecoli.sorted.bam -o sberry_out -t 4
+$ flye --meta --pacbio-raw reads.fq.gz --out-dir flye_out --genome-size 300k --threads 12
+$ minimap2 -ax map-pb -t 12 -2 flye/assembly.fasta reads.fq.gz | samtools sort --threads 8 >flye_out/alignment.sorted.bam
 ```
-Strainberry should take around 5 minutes to finish. The input is a small fragment of a consensus *E. coli* sequence.
-In the `sberry_out` output directory, both `assembly.contigs.fa` and `assembly.scaffolds.fa` files should contain two sequences
-(one closer to strain K12, the other closer to strain W).
+### Running Strainberry on a small strain-oblivious assembly
+Given the `assembly.fasta` and `alignment.sorted.bam` available (or generated with the previous commands), it is possible to run Strainberry as follows:
+```
+$ strainberry -r assembly.fasta -b alignment.sorted.bam -o sberry_out -t 4
+```
+Strainberry should take around 5 minutes to finish. The file `assembly.fasta` contains a single sequence which is a consensus of a small region of *E. coli* strains K12 and W.
+After a successful run of Strainberry, in the `sberry_out` directory, the file `assembly.scaffolds.fa` should contain two scaffolds (one closer to strain K12, the other closer to strain W).
 
 
 ## Command line options
