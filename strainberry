@@ -150,6 +150,7 @@ ${CMD_DIR}/sberry-assemble \
     -r "${OUTDIR}"/00-preprocess/reference.fa \
     -b "${OUTDIR}"/20-separation/tagged \
     -v "${OUTDIR}"/20-separation/variants.phased.vcf.gz \
+    -s "${SNV_MINDENS}" \
     -o "${OUTDIR}" -t ${NTHREADS} ${ONT_ARG}
 if [ $? -ne 0 ]; then print_error "sberry-assemble command failed"; exit 2; fi
 
