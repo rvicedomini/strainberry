@@ -149,7 +149,7 @@ for psid in $(cat ./30-assembly/reference.phasesets.dens.tsv | awk -F $'\t' -v m
             fname=${fbase%.fa.gz}
             #pslen=$(cat "${OUTDIR}"/reference.phasesets.len.tsv | awk -F $'\t' -v psname="${fname%_*}" '$1==psname{x=1;printf("%d",$2);exit}')
             mkdir -p ./30-assembly/wtdbg2/"${fname}"
-            echo "gzip -dc ${f} | wtdbg2 ${WTDBG_PRESET} -t 2 -e ${WTDBG_MINDEPTH} -l 1000 -L 3000 -S 1 -R -o ./30-assembly/wtdbg2/${fname}/${fname} -i - &>./30-assembly/wtdbg2/${fname}/${fname}.log"
+            echo "gzip -dc ${f} | wtdbg2 ${WTDBG_PRESET} -t 2 -e ${WTDBG_MINDEPTH} -l 1024 -S 1 -R -fo ./30-assembly/wtdbg2/${fname}/${fname} -i - &>./30-assembly/wtdbg2/${fname}/${fname}.log"
         fi
     done
 done | parallel -j ${WTDBG_JOBS} --joblog ./30-assembly/wtdbg2-assembly.joblog &>/dev/null
