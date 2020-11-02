@@ -28,23 +28,23 @@ It requires certain packages/tools in order to be installed/used:
 The simplest (and recommended) way to install Strainberry dependencies is by creating an isolated conda environment (*e.g.*, named sberry):
 
 ```
-git clone https://github.com/rvicedomini/strainberry.git
-cd strainberry
-conda env create -n sberry --file environment.yml
+$ git clone https://github.com/rvicedomini/strainberry.git
+$ cd strainberry
+$ conda env create -n sberry --file environment.yml
 ```
 
 To make the `strainberry` command available, it is advised to include the absolute path of Strainberry's directory in your PATH environment variable by adding the following line to your `~/.bashrc` file:
 
 ```
-export PATH=/absolute/path/to/strainberry:${PATH}
+$ export PATH=/absolute/path/to/strainberry:${PATH}
 ```
 
 ### Updating to the latest version
 
 ``` 
-cd strainberry
-git pull
-conda env update -n sberry --file environment.yml
+$ cd strainberry
+$ git pull
+$ conda env update -n sberry --file environment.yml
 ```
 
 ## Usage
