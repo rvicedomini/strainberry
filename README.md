@@ -39,7 +39,7 @@ To make the `strainberry` command available, it is advised to include the absolu
 export PATH=/absolute/path/to/strainberry:${PATH}
 ```
 
-### Updating to latest version
+### Updating to the latest version
 
 ``` 
 cd strainberry
@@ -106,7 +106,7 @@ In order to generate a strain-oblivious assembly and a read alignment, we recomm
 Assuming these tools are available, it is possible to run the following commands, using 12 threads:
 
 ```
-cd example
+$ cd example
 $ flye --meta --pacbio-raw reads.fq.gz --out-dir flye_out --genome-size 300k --threads 12
 $ minimap2 -ax map-pb -t 12 ./flye_out/assembly.fasta reads.fq.gz | samtools sort >./flye_out/alignment.sorted.bam
 ```
