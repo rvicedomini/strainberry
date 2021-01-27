@@ -90,7 +90,7 @@ In the contig assembly headers are of the form
 ```
 >sberry|[reference-id]_[phaseset-id]_h[haplotype-id]_[contig-id]
 ```
-for the separated haplotypes/strains, while are of the form:
+for the separated haplotypes/strains, while they are of the form
 ```
 >[reference-id]_[reference-position]
 ```
