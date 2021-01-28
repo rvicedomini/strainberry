@@ -22,8 +22,6 @@ def reverse_complement(seq):
 def insert_newlines(inString, every=80):
     return inString if every <= 0 else '\n'.join(inString[i:i+every] for i in range(0, len(inString), every))
 
-
-# DOVETAIL_SUFFIX < REF_CONTAINED < DOVETAIL_PREFIX is important for adding edges
 class MappingType(Enum):
     DOVETAIL_SUFFIX=0
     QUERY_PREFIX=1
@@ -34,6 +32,8 @@ class MappingType(Enum):
     QUERY_CONTAINED=6
     REF_CONTAINED=7
     DOVETAIL_PREFIX=8
+    def __lt__(self, other):
+        return self.value < other.value
 
 def classify_mapping(seq1,seq2,o=50,r=0.05):
     b1,e1,l1 = seq1
