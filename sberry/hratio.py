@@ -17,7 +17,7 @@ class PhaseSet:
     def __init__(self):
         self.id = None
         self.plist = []
-        self.refseq = []
+        #self.refseq = []
         self.haplo = defaultdict(list)
         self.creads = defaultdict(CondRead)
 
@@ -71,7 +71,7 @@ def average_hratio(bamfile,vcffile,nproc=1):
                 phaseset = psDict[rec.CHROM][call.data.PS]
                 phaseset.id = f'{call.data.PS}'
                 phaseset.plist.append(rec.POS-1)
-                phaseset.refseq.append(rec.REF)
+                #phaseset.refseq.append(rec.REF)
                 gtypes = call.gt_bases.split('|')
                 for i,gt in enumerate(gtypes):
                     phaseset.haplo[i].append(gt)
@@ -94,12 +94,14 @@ def average_hratio(bamfile,vcffile,nproc=1):
     pool.join()
 
     tot_nreads=0
+    tot_pslen=0
     weighted_sum=0
     for contig,psid,hratio,nreads in results:
         weighted_sum+=hratio*nreads
         tot_nreads+=nreads
-
-    return (weighted_sum/nreads,nreads)
+    
+    avg_hratio = weighted_sum/nreads if nreads > 0 else 1.0
+    return (avg_hratio,nreads)
     
 #    print(f'Writing results to {opt.prefix}.hratio.tsv',file=sys.stderr)
 #    with open(f'{opt.prefix}.hratio.tsv','w') as out:
