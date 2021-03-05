@@ -118,7 +118,7 @@ ln -fs $(readlink -f "${FASTA}") "${OUTDIR}/00-preprocess/reference.fa" \
     && samtools faidx "${OUTDIR}/00-preprocess/reference.fa" \
     && fasta_generate_regions.py "${OUTDIR}/00-preprocess/reference.fa" ${REGION_SIZE} >"${OUTDIR}/00-preprocess/regions.txt"
 ln -fs $(readlink -f "${BAM}") "${OUTDIR}/00-preprocess/alignment.bam" \
-    && samtools index -@ 2 "${OUTDIR}/00-preprocess/alignment.bam"
+    && ln -fs $(readlink -f "${BAM}".bai) "${OUTDIR}/00-preprocess/alignment.bam.bai"
 
 cd "${OUTDIR}"
 
