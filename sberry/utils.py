@@ -6,7 +6,7 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 def datetime_now():
-    return datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def print_error(msg):
     eprint(f'[{datetime_now()}] error: {msg}')
