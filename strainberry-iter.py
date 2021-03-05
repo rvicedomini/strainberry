@@ -85,7 +85,7 @@ def main(argv=None):
         os.makedirs(out_dir,exist_ok=True)
 
         # SNP calling, phasing, and read separation
-        sberry_variants_cmd = [ os.path.join(sberry_root,'sberry-variants'), '-r', fastafile, '-b', bamfile, '-o', out_dir, '-q', str(opt.QUAL) ]
+        sberry_variants_cmd = [ os.path.join(sberry_root,'sberry-variants'), '-r', fastafile, '-b', bamfile, '-o', out_dir, '-q', f'{opt.QUAL}', '-t', f'{opt.CPUS}' ]
         sberry_variants = subprocess.run(sberry_variants_cmd)
         if sberry_variants.returncode != 0:
             print_error(f'sberry-variants command failed')
