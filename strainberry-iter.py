@@ -4,6 +4,7 @@ import sys,os,argparse,subprocess
 import pysam
 
 from sberry.utils import *
+from sberry.hratio import average_hratio
 from sberry.__version__ import __version__
 
 
@@ -21,7 +22,7 @@ def _version():
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog='Strainberry', description='Automated strain separation of low-complexity metagenomes', add_help=False)
+    parser = argparse.ArgumentParser(prog='strainberry', description='Automated strain separation of low-complexity metagenomes', add_help=False)
     # MANDATORY ARGUMENTS
     required_args = parser.add_argument_group('Required arguments')
     required_args.add_argument('-r','--reference', dest='FASTA', metavar='PATH', required=True, help='Strain-oblivious assembly in FASTA format')
@@ -72,9 +73,9 @@ def main(argv=None):
         print_status(f'parameters: -n {opt.STRAINS} -q {opt.QUAL} -s {opt.SNV_DENSITY} -c {opt.CPUS} {opt.ONT}')
 
     nsep=2
+    hratio=1.0
     bamfile=opt.BAM
     fastafile=opt.FASTA
-
     while nsep <= opt.STRAINS:
 
         print_status(f'### Strainberry {nsep}-strain separation')
@@ -89,15 +90,25 @@ def main(argv=None):
         if sberry_variants.returncode != 0:
             print_error(f'sberry-variants command failed')
             return 2
+        
+        vcffile=os.path.join(out_dir,'20-separation','variants.phased.vcf.gz')
+        new_hratio,nreads=average_hratio(bamfile,vcffile,nproc=opt.CPUS)
+
+        if nsep > 2 and (new_hratio > hratio or new_hratio < 0.1 * hratio or new_hratio < 0.1):
+            print_status(f'Average Hamming ratio did not improve enough: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
+            print_status(f'Best separation available at {opt.OUTDIR}/strainberry_n{nsep-1}')
+            break
+        print_status(f'Average Hamming ratio improved: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
+        hratio=new_hratio
 
         # Haplotype assembly
         sberry_assemble_cmd = [ os.path.join(sberry_root,'sberry-assemble'),
                 '-r', os.path.join(out_dir,'00-preprocess','reference.fa'),
                 '-b', os.path.join(out_dir,'20-separation','tagged'),
-                '-v', os.path.join(out_dir,'20-separation','variants.phased.vcf.gz'),
-                '-s', str(opt.SNV_DENSITY),
+                '-v', vcffile,
                 '-o', out_dir,
-                '-t', str(opt.CPUS),
+                '-s', f'{opt.SNV_DENSITY}',
+                '-t', f'{opt.CPUS}',
                 '--nanopore' if opt.ONT else '' ]
         sberry_assemble = subprocess.run(sberry_assemble_cmd)
         if sberry_assemble.returncode != 0:
