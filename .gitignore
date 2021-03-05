@@ -1,1 +1,6 @@
-example/sberry_out/
+example/*/
+
+**/__pycache__/
+*.py[cod]
+*$py.class
+

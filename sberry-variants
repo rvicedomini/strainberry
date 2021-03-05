@@ -3,7 +3,7 @@
 CMD_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)
 CMD_NAME=$(basename "${BASH_SOURCE[0]}")
 CMD_STRING="${BASH_SOURCE[0]} ${@}"
-SCRIPTS_DIR="${CMD_DIR}"/scripts
+SCRIPTS_DIR="${CMD_DIR}"/sberry
 
 # Include common definitions
 source "${CMD_DIR}/sberry-common"
