@@ -100,8 +100,8 @@ def average_hratio(bamfile,vcffile,nproc=1):
         weighted_sum+=hratio*nreads
         tot_nreads+=nreads
     
-    avg_hratio = weighted_sum/nreads if nreads > 0 else 1.0
-    return (avg_hratio,nreads)
+    avg_hratio = weighted_sum/tot_nreads if tot_nreads > 0 else 1.0
+    return (avg_hratio,tot_nreads)
     
 #    print(f'Writing results to {opt.prefix}.hratio.tsv',file=sys.stderr)
 #    with open(f'{opt.prefix}.hratio.tsv','w') as out:
