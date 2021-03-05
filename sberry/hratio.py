@@ -1,15 +1,12 @@
-#!/usr/bin/env python3
-
-import sys,os,argparse,operator
-import multiprocessing
+import sys,os,multiprocessing
 from collections import defaultdict
 
 import pysam, vcf
+from sberry.utils import *
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-
+#import matplotlib.pyplot as plt
+#import seaborn as sns
+#import pandas as pd
 
 class CondRead:
     def __init__(self):
@@ -61,29 +58,12 @@ def average_contig_hratio(bamfile,ctg,ps_list):
     return (ctg,ctg_hratio)
 
 
-def main(argv=None):
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--bam', dest='bam', required=True, help='input BAM file of mapped long reads')
-    parser.add_argument('--vcf', dest='vcf', required=True, help='input VCF file with positions of called variants')
-    parser.add_argument('-p','--prefix', dest='prefix', type=str, default='out', help='output file prefix')
-    parser.add_argument('-t','--threads', dest='threads', type=int, default=int(4), help='number of threads for compressing/decompressing BAM files')
-    opt = parser.parse_args()
-
-    validParameters=True
-    if not os.path.isfile(opt.bam):
-        validParameters=False
-        print(f'--bam file "{opt.bam}" does not exist.',file=sys.stderr)
-    if not os.path.isfile(opt.vcf):
-        validParameters=False
-        print(f'--vcf file "{opt.vcf}" does not exist.',file=sys.stderr)
-    if not validParameters:
-        return 1
+def average_hratio(bamfile,vcffile,nproc=1):
 
     # load SNV dictionary of called positions
-    print(f'Loading SNVs',file=sys.stderr)
+    print_status(f'Loading SNVs')
     psDict=defaultdict(lambda:defaultdict(PhaseSet))
-    with open(opt.vcf,'rb') as fp:
+    with open(vcffile,'rb') as fp:
         vcf_reader=vcf.Reader(fp)
         for rec in vcf_reader:
             call=rec.samples[0]
@@ -103,22 +83,30 @@ def main(argv=None):
         for ps_id,ps_list in ctg_hratio.items():
             nreads = len(ps_list)
             avg_hratio = sum(ps_list)/nreads if nreads > 0 else 0.0
-            results.append( [ctg,ps_id,f'{avg_hratio:.4f}',f'{nreads}'] )
+            results.append( (ctg,ps_id,avg_hratio,nreads) )
 
-    print(f'Processing {len(contigs)} contigs with phased regions',file=sys.stderr)
-    pool = multiprocessing.Pool(processes=opt.threads,maxtasksperchild=1)
+    print_status(f'Processing {sum(len(ps) for ps in psDict.values())} phased regions')
+    pool = multiprocessing.Pool(processes=nproc,maxtasksperchild=1)
     for ctg in contigs:
         phasesets = list(psDict[ctg].values())
-        pool.apply_async(average_contig_hratio, args=(opt.bam,ctg,phasesets,), callback=get_result)
+        pool.apply_async(average_contig_hratio, args=(bamfile,ctg,phasesets,), callback=get_result)
     pool.close()
     pool.join()
+
+    tot_nreads=0
+    weighted_sum=0
+    for contig,psid,hratio,nreads in results:
+        weighted_sum+=hratio*nreads
+        tot_nreads+=nreads
+
+    return (weighted_sum/nreads,nreads)
     
-    print(f'Writing results to {opt.prefix}.hratio.tsv',file=sys.stderr)
-    with open(f'{opt.prefix}.hratio.tsv','w') as out:
-        out.write('#contig\tPS\tavg-hratio\tnreads\n')
-        for rec in results:
-            out.write('\t'.join(rec))
-            out.write('\n')
+#    print(f'Writing results to {opt.prefix}.hratio.tsv',file=sys.stderr)
+#    with open(f'{opt.prefix}.hratio.tsv','w') as out:
+#        out.write('#contig\tPS\tavg-hratio\tnreads\n')
+#        for rec in results:
+#            out.write('\t'.join(rec))
+#            out.write('\n')
 
 #    df = pd.DataFrame(data={'type':'best_haplo','hratio':best_hratios})
 #    #df = df.append(pd.DataFrame(data={'type':'reference','hratio':ref_hratios}))
@@ -132,10 +120,4 @@ def main(argv=None):
 #    plt.ylabel('Density')
 #    plt.tight_layout()
 #    plt.savefig(f'{opt.prefix}.hratios.pdf')
-
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
 
