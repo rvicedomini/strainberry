@@ -2,6 +2,15 @@ import sys
 from datetime import datetime
 
 
+rctable = str.maketrans("ACTGNactgn", "TGACNtgacn")
+def reverse_complement(seq):
+    return seq.translate(rctable)[::-1]
+
+
+def insert_newlines(inString, every=80):
+    return inString if every <= 0 else '\n'.join(inString[i:i+every] for i in range(0, len(inString), every))
+
+
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
