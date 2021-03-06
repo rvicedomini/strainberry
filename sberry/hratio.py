@@ -58,7 +58,7 @@ def average_contig_hratio(bamfile,ctg,ps_list):
     return (ctg,ctg_hratio)
 
 
-def average_hratio(bamfile,vcffile,nproc=1):
+def average_hratio(bamfile,vcffile,snv_dens=None,nproc=1):
 
     # load SNV dictionary of called positions
     print_status(f'Loading SNVs')
@@ -85,7 +85,6 @@ def average_hratio(bamfile,vcffile,nproc=1):
             avg_hratio = sum(ps_list)/nreads if nreads > 0 else 0.0
             results.append( (ctg,ps_id,avg_hratio,nreads) )
 
-    print_status(f'Processing {sum(len(ps) for ps in psDict.values())} phased regions')
     pool = multiprocessing.Pool(processes=nproc,maxtasksperchild=1)
     for ctg in contigs:
         phasesets = list(psDict[ctg].values())
@@ -100,8 +99,9 @@ def average_hratio(bamfile,vcffile,nproc=1):
         weighted_sum+=hratio*nreads
         tot_nreads+=nreads
     
+    num_phasesets = sum(len(ps) for ps in psDict.values())
     avg_hratio = weighted_sum/tot_nreads if tot_nreads > 0 else 1.0
-    return (avg_hratio,tot_nreads)
+    return (avg_hratio,num_phasesets,tot_nreads)
     
 #    print(f'Writing results to {opt.prefix}.hratio.tsv',file=sys.stderr)
 #    with open(f'{opt.prefix}.hratio.tsv','w') as out:
