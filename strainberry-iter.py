@@ -4,7 +4,9 @@ import sys,os,argparse,subprocess
 import pysam
 
 from sberry.utils import *
+from sberry.separate import LongshotReadSeparator
 from sberry.hratio import average_hratio
+from sberry.scaffolder import Scaffolder
 from sberry.__version__ import __version__
 
 
@@ -46,6 +48,9 @@ def main(argv=None):
     if not os.path.isfile(opt.FASTA):
         validParameters=False
         print_error(f'FASTA file "{opt.FASTA}" does not exist.')
+    elif not os.path.isfile(f'{opt.FASTA}.fai'):
+        validParameters=False
+        print_error(f'FASTA index file "{opt.FASTA}.fai" does not exist. FASTA file must be indexed with samtools faidx.')
     if not os.path.isfile(opt.BAM):
         validParameters=False
         print_error(f'BAM file "{opt.BAM}" does not exist.')
@@ -78,65 +83,69 @@ def main(argv=None):
     fastafile=opt.FASTA
     while nsep <= opt.STRAINS:
 
-        print_status(f'### Strainberry {nsep}-strain separation')
-
-        # Create directory for current iteration
+        print_status(f'### performing {nsep}-strain separation')
+        # Create output directory for current iteration
         out_dir = os.path.join(opt.OUTDIR,f'strainberry_n{nsep}')
         os.makedirs(out_dir,exist_ok=True)
 
         # SNP calling, phasing, and read separation
-        sberry_variants_cmd = [ os.path.join(sberry_root,'sberry-variants'), '-r', fastafile, '-b', bamfile, '-o', out_dir, '-q', f'{opt.QUAL}', '-t', f'{opt.CPUS}' ]
-        sberry_variants = subprocess.run(sberry_variants_cmd)
-        if sberry_variants.returncode != 0:
-            print_error(f'sberry-variants command failed')
+        print_status(f'separating reads')
+        longshot = LongshotReadSeparator(fastafile,bamfile,out_dir,qual=opt.QUAL,nproc=opt.CPUS)
+        if not longshot.run():
+            print_error(f'read separation failed')
             return 2
-        
-        vcffile=os.path.join(out_dir,'20-separation','variants.phased.vcf.gz')
-        new_hratio,nreads=average_hratio(bamfile,vcffile,nproc=opt.CPUS)
 
-        if nsep > 2 and (new_hratio > hratio or new_hratio < 0.1 * hratio or new_hratio < 0.1):
-            print_status(f'Average Hamming ratio did not improve enough: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
-            print_status(f'Best separation available at {opt.OUTDIR}/strainberry_n{nsep-1}')
+        new_hratio,num_phasesets,nreads=average_hratio(bamfile,longshot.phased_vcf,snv_dens=opt.SNV_DENSITY,nproc=opt.CPUS)
+        if num_phasesets == 0:
+            print_status(f'no more regions to separate')
+            print_status(f'best separation available at: {fastafile}')
             break
-        print_status(f'Average Hamming ratio improved: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
+        if nsep > 2 and (new_hratio > hratio or new_hratio < 0.1 * hratio):
+            print_status(f'average Hamming ratio did not improve enough: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
+            print_status(f'best separation available at: {fastafile}')
+            break
+        print_status(f'average Hamming ratio improved: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
         hratio=new_hratio
 
         # Haplotype assembly
         sberry_assemble_cmd = [ os.path.join(sberry_root,'sberry-assemble'),
-                '-r', os.path.join(out_dir,'00-preprocess','reference.fa'),
-                '-b', os.path.join(out_dir,'20-separation','tagged'),
-                '-v', vcffile,
+                '-r', fastafile,
+                '-b', longshot.tagged_dir,
+                '-v', longshot.phased_vcf,
                 '-o', out_dir,
                 '-s', f'{opt.SNV_DENSITY}',
                 '-t', f'{opt.CPUS}',
                 '--nanopore' if opt.ONT else '' ]
-        sberry_assemble = subprocess.run(sberry_assemble_cmd)
-        if sberry_assemble.returncode != 0:
+        if subprocess.run(sberry_assemble_cmd).returncode != 0:
             print_error(f'sberry-assemble command failed')
             return 2
 
         # Scaffolding
-        sberry_sascf_cmd = [ os.path.join(sberry_root,'sberry-sascf'),
-                '-r', os.path.join(out_dir,'assembly.contigs.fa'),
-                '-b', os.path.join(out_dir,'00-preprocess','alignment.bam'),
-                '-o', out_dir,
-                '-t', str(opt.CPUS),
-                '--nanopore' if opt.ONT else '' ]
-        sberry_sascf = subprocess.run(sberry_sascf_cmd)
-        if sberry_sascf.returncode != 0:
-            print_error(f'sberry-sascf command failed')
+        contigfile=os.path.join(out_dir,'assembly.contigs.fa')
+        scaffolder = Scaffolder(contigfile,bamfile,out_dir,is_ont=opt.ONT,nproc=opt.CPUS)
+        if not scaffolder.run():
+            print_error(f'scaffolding failed')
             return 2
+        print_status(f'scaffold file created at: {scaffolder.scaffold_file}')
+#        sberry_sascf_cmd = [ os.path.join(sberry_root,'sberry-sascf'),
+#                '-r', os.path.join(out_dir,'assembly.contigs.fa'),
+#                '-b', os.path.join(out_dir,'00-preprocess','alignment.bam'),
+#                '-o', out_dir,
+#                '-t', str(opt.CPUS),
+#                '--nanopore' if opt.ONT else '' ]
+#        if subprocess.run(sberry_sascf_cmd).returncode != 0:
+#            print_error(f'sberry-sascf command failed')
+#            return 2
         
         # update file names for next iteration
         bamfile=os.path.join(out_dir,'assembly.scaffolds.bam')
-        fastafile=os.path.join(out_dir,'assembly.scaffolds.fa')
+        fastafile=scaffolder.scaffold_file
 
         # Map input reads to current strain-aware scaffolds
-        print_status('Mapping reads to Strainberry scaffolds')
+        print_status('mapping reads to strain-separated scaffolds')
         samtools_fastq_cmd = [ 'samtools', 'fastq', os.path.join(out_dir,'00-preprocess','alignment.bam') ]
         minimap2_cmd = [ 'minimap2', '-ax', 'map-ont' if opt.ONT else 'map-pb', '-t', f'{opt.CPUS}', os.path.join(out_dir,'assembly.scaffolds.fa'), '-' ]
         samtools_sort_cmd = [ 'samtools', 'sort', '--threads', f'{opt.CPUS}', '-o', os.path.join(out_dir,'assembly.scaffolds.bam') ]
-        samtools_index_cmd = [ 'samtools', 'index', f'-@{min(2,opt.CPUS)}', os.path.join(out_dir,'assembly.scaffolds.bam') ]
         # Run mapping commands
         samtools_fastq = subprocess.Popen(samtools_fastq_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         minimap2 = subprocess.Popen(minimap2_cmd, stdin=samtools_fastq.stdout, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -145,9 +154,13 @@ def main(argv=None):
         if samtools_sort.returncode != 0:
             print_error(f'read mapping to strain-separated scaffolds failed')
             return 2
-        samtools_index = subprocess.run(samtools_index_cmd)
-        if samtools_index.returncode != 0:
-            print_error(f'failed to create index {bamfile}')
+
+        # Index BAM and FASTA files for the next iteration
+        if subprocess.run(['samtools','index',f'-@{min(4,opt.CPUS)}',bamfile]).returncode != 0:
+            print_error(f'failed to create index for {bamfile}')
+            return 2
+        if subprocess.run(['samtools','faidx',fastafile]).returncode != 0:
+            print_error(f'failed to create index for {fastafile}')
             return 2
 
         nsep+=1
