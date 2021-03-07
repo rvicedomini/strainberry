@@ -1,35 +1,34 @@
 import sys,os,multiprocessing
 from collections import defaultdict
 
-import pysam, vcf
+import pysam
 from sberry.utils import *
+from sberry.phaseset import PhasesetCollection
 
 #import matplotlib.pyplot as plt
 #import seaborn as sns
 #import pandas as pd
 
-class CondRead:
+
+class CondensedRead:
     def __init__(self):
-        self.plist = []
+        self.positions = []
         self.seq = []
 
-class PhaseSet:
-    def __init__(self):
-        self.id = None
-        self.plist = []
-        #self.refseq = []
-        self.haplo = defaultdict(list)
-        self.creads = defaultdict(CondRead)
 
 def hamming_ratio(str_a,str_b):
+    assert len(str_a)==len(str_b) and len(str_a)>0
     return sum(a!=b for a,b in zip(str_a,str_b))/len(str_a)
 
-def average_contig_hratio(bamfile,ctg,ps_list):
+
+def average_contig_hratio( bamfile, ctg, ps_list, min_read_overlap=3000):
+
     with pysam.AlignmentFile(bamfile,'rb') as bam:
         for phaseset in ps_list:
-            ps_start=phaseset.plist[0]-1 # pysam pileup require 0-based indices
-            ps_end=phaseset.plist[-1]
-            ps_positions=set(phaseset.plist)
+            ps_start=phaseset.start()
+            ps_end=phaseset.end()
+            ps_positions=set(phaseset.positions)
+            phaseset.creads=defaultdict(CondensedRead)
             for pileupcol in bam.pileup(reference=ctg, start=ps_start, stop=ps_end, min_base_quality=20, ignore_overlaps=False, stepper='all'):
                 pos=pileupcol.reference_pos
                 if pos not in ps_positions: # FIXME: this could be done more efficiently
@@ -40,56 +39,43 @@ def average_contig_hratio(bamfile,ctg,ps_list):
                     read_name=alignment.query_name
                     read_overlap=min(ps_end,alignment.reference_end)-max(ps_start,alignment.reference_start)
                     assert read_overlap > 0
-                    if read_overlap >= min(3000,ps_end-ps_start):
-                        if len(phaseset.creads[read_name].plist) == 0 or phaseset.creads[read_name].plist[-1] != pos:
-                            phaseset.creads[read_name].plist.append(pos)
+                    if read_overlap >= min(min_read_overlap,ps_end-ps_start):
+                        if len(phaseset.creads[read_name].positions) == 0 or phaseset.creads[read_name].positions[-1] != pos:
+                            phaseset.creads[read_name].positions.append(pos)
                             phaseset.creads[read_name].seq.append(nuc)
+    
     ctg_hratio=defaultdict(list)
     for phaseset in ps_list:
         creads=phaseset.creads
         for read_name,cread in creads.items():
-            cread_positions = set(cread.plist)
-            assert len(cread_positions) == len(cread.plist)
-            ps_indices = [ i for i,pos in enumerate(phaseset.plist) if pos in cread_positions ]
+            cread_positions = set(cread.positions)
+            assert len(cread_positions) == len(cread.positions)
+            ps_indices = [ i for i,pos in enumerate(phaseset.positions) if pos in cread_positions ]
             ps_haplotypes = { h:''.join(htype[i] for i in ps_indices) for h,htype in phaseset.haplo.items() }
             cread_seq = ''.join(cread.seq)
             hratio = min(hamming_ratio(cread_seq,hap_seq) for hap_seq in ps_haplotypes.values())
-            ctg_hratio[phaseset.id].append(hratio)
+            ctg_hratio[phaseset.psid].append(hratio)
+    
     return (ctg,ctg_hratio)
 
 
-def average_hratio(bamfile,vcffile,snv_dens=None,nproc=1):
+def average_hratio( bamfile:str, psc:PhasesetCollection, 
+        snv_dens:float = None, nproc: int = 1 ):
 
-    # load SNV dictionary of called positions
-    print_status(f'loading SNVs')
-    psDict=defaultdict(lambda:defaultdict(PhaseSet))
-    with open(vcffile,'rb') as fp:
-        vcf_reader=vcf.Reader(fp)
-        for rec in vcf_reader:
-            call=rec.samples[0]
-            if call.phased:
-                phaseset = psDict[rec.CHROM][call.data.PS]
-                phaseset.id = f'{call.data.PS}'
-                phaseset.plist.append(rec.POS-1)
-                #phaseset.refseq.append(rec.REF)
-                gtypes = call.gt_bases.split('|')
-                for i,gt in enumerate(gtypes):
-                    phaseset.haplo[i].append(gt)
-    contigs = list(psDict.keys())
+    references = psc.references()
 
     results=[]
     def get_result(res):
         ctg,ctg_hratio=res
-        for ps_id,ps_list in ctg_hratio.items():
-            nreads = len(ps_list)
-            avg_hratio = sum(ps_list)/nreads if nreads > 0 else 0.0
+        for ps_id,hr_list in ctg_hratio.items():
+            nreads = len(hr_list)
+            avg_hratio = sum(hr_list)/nreads if nreads > 0 else 0.0
             results.append( (ctg,ps_id,avg_hratio,nreads) )
     
-    print_status(f'processing {sum(len(ps) for ps in psDict.values())} phased regions')
     pool = multiprocessing.Pool(processes=nproc,maxtasksperchild=1)
-    for ctg in contigs:
-        phasesets = list(psDict[ctg].values())
-        pool.apply_async(average_contig_hratio, args=(bamfile,ctg,phasesets,), callback=get_result)
+    for ctg in references:
+        ctg_phasesets = psc.phasesets(ctg)
+        pool.apply_async(average_contig_hratio, args=(bamfile,ctg,ctg_phasesets,), callback=get_result)
     pool.close()
     pool.join()
 
@@ -99,7 +85,7 @@ def average_hratio(bamfile,vcffile,snv_dens=None,nproc=1):
         weighted_sum+=hratio*nreads
         tot_nreads+=nreads
     
-    num_phasesets = sum(len(ps) for ps in psDict.values())
+    num_phasesets = psc.size()
     avg_hratio = weighted_sum/tot_nreads if tot_nreads > 0 else 1.0
     return (avg_hratio,num_phasesets,tot_nreads)
     

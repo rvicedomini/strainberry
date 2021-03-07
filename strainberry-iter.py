@@ -5,6 +5,7 @@ import pysam
 
 from sberry.utils import *
 from sberry.separate import LongshotReadSeparator
+from sberry.phaseset import PhasesetCollection
 from sberry.hratio import average_hratio
 from sberry.scaffolder import Scaffolder
 from sberry.__version__ import __version__
@@ -95,13 +96,16 @@ def main(argv=None):
             print_error(f'read separation failed')
             return 2
 
-        new_hratio,num_phasesets,nreads=average_hratio(bamfile,longshot.phased_vcf,snv_dens=opt.SNV_DENSITY,nproc=opt.CPUS)
+        psc = PhasesetCollection()
+        psc.load_from_vcf(longshot.phased_vcf,opt.SNV_DENSITY)
+
+        new_hratio,num_phasesets,nreads=average_hratio(bamfile,psc,snv_dens=opt.SNV_DENSITY,nproc=opt.CPUS)
         print_status(f'hratio={new_hratio} |phasesets|={num_phasesets} nreads={nreads}')
         if num_phasesets == 0:
             print_status(f'no more regions to separate')
             print_status(f'best separation available at: {fastafile}')
             break
-        if nsep > 2 and (new_hratio > hratio or new_hratio < 0.1 * hratio):
+        if nsep > 2 and (new_hratio > hratio or (hratio-new_hratio) < 0.1*hratio):
             print_status(f'average Hamming ratio did not improve enough: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
             print_status(f'best separation available at: {fastafile}')
             break
