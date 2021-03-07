@@ -96,6 +96,7 @@ def main(argv=None):
             return 2
 
         new_hratio,num_phasesets,nreads=average_hratio(bamfile,longshot.phased_vcf,snv_dens=opt.SNV_DENSITY,nproc=opt.CPUS)
+        print_status(f'hratio={new_hratio} |phasesets|={num_phasesets} nreads={nreads}')
         if num_phasesets == 0:
             print_status(f'no more regions to separate')
             print_status(f'best separation available at: {fastafile}')
