@@ -128,24 +128,11 @@ def main(argv=None):
             print_error(f'scaffolding failed')
             return 2
         print_status(f'scaffold file created at: {scaffolder.scaffold_file}')
-#        sberry_sascf_cmd = [ os.path.join(sberry_root,'sberry-sascf'),
-#                '-r', os.path.join(out_dir,'assembly.contigs.fa'),
-#                '-b', os.path.join(out_dir,'00-preprocess','alignment.bam'),
-#                '-o', out_dir,
-#                '-t', str(opt.CPUS),
-#                '--nanopore' if opt.ONT else '' ]
-#        if subprocess.run(sberry_sascf_cmd).returncode != 0:
-#            print_error(f'sberry-sascf command failed')
-#            return 2
         
-        # update file names for next iteration
-        bamfile=os.path.join(out_dir,'assembly.scaffolds.bam')
-        fastafile=scaffolder.scaffold_file
-
         # Map input reads to current strain-aware scaffolds
         print_status('mapping reads to strain-separated scaffolds')
-        samtools_fastq_cmd = [ 'samtools', 'fastq', os.path.join(out_dir,'00-preprocess','alignment.bam') ]
-        minimap2_cmd = [ 'minimap2', '-ax', 'map-ont' if opt.ONT else 'map-pb', '-t', f'{opt.CPUS}', os.path.join(out_dir,'assembly.scaffolds.fa'), '-' ]
+        samtools_fastq_cmd = [ 'samtools', 'fastq', bamfile ]
+        minimap2_cmd = [ 'minimap2', '-ax', 'map-ont' if opt.ONT else 'map-pb', '-t', f'{opt.CPUS}', scaffolder.scaffold_file, '-' ]
         samtools_sort_cmd = [ 'samtools', 'sort', '--threads', f'{opt.CPUS}', '-o', os.path.join(out_dir,'assembly.scaffolds.bam') ]
         # Run mapping commands
         samtools_fastq = subprocess.Popen(samtools_fastq_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -155,6 +142,10 @@ def main(argv=None):
         if samtools_sort.returncode != 0:
             print_error(f'read mapping to strain-separated scaffolds failed')
             return 2
+
+        # update file names for next iteration
+        bamfile=os.path.join(out_dir,'assembly.scaffolds.bam')
+        fastafile=scaffolder.scaffold_file
 
         # Index BAM and FASTA files for the next iteration
         if subprocess.run(['samtools','index',f'-@{min(4,opt.CPUS)}',bamfile]).returncode != 0:
