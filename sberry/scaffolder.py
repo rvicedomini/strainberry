@@ -4,7 +4,6 @@ import sys,os,gzip,subprocess
 import networkx as nx
 
 from collections import defaultdict
-from dataclasses import dataclass,field
 from statistics import median
 from enum import Enum
 from Bio import SeqIO
@@ -21,7 +20,7 @@ def fix_neighbors(asmGraph):
         asmGraph.nodes[a]['outedges'] -= toremove
     return asmGraph
 
-def remove_simple_transitive_edges(asmGraph,asmContigs,npContigs):
+def remove_simple_transitive_edges(asmGraph):
     # TODO: the following is a naive implementation, check for unwanted behaviors...
     # TODO: maybe I can avoid code duplication, just looking at etype edge property
     # remove transitive edges a->c if there exists a->b->c
@@ -32,14 +31,14 @@ def remove_simple_transitive_edges(asmGraph,asmContigs,npContigs):
             if a!=b and asmGraph[a][b]['etype'][b] == MappingType.DOVETAIL_PREFIX:
                 for c in asmGraph.nodes[b]['outedges']:
                     bc_ctype=asmGraph[b][c]['etype'][c]
-                    if b!=c and asmGraph.has_edge(a,c) and asmGraph[a][c]['etype'][c] == bc_ctype and asmGraph[a][c]['etype'][a] == ab_atype and len(asmGraph.nodes[b]['outedges'])==1 and len(asmGraph.nodes[b]['inedges'])==1: # and c in asmContigs:
+                    if b!=c and asmGraph.has_edge(a,c) and asmGraph[a][c]['etype'][c] == bc_ctype and asmGraph[a][c]['etype'][a] == ab_atype and len(asmGraph.nodes[b]['outedges'])==1 and len(asmGraph.nodes[b]['inedges'])==1:
                         removeEdgeSet.add((a,c))
                         asmGraph[a][b]['nreads']+=asmGraph[a][c]['nreads']
                         asmGraph[b][c]['nreads']+=asmGraph[a][c]['nreads']
             elif a!=b and asmGraph[a][b]['etype'][b] == MappingType.DOVETAIL_SUFFIX:
                 for c in asmGraph.nodes[b]['inedges']:
                     bc_ctype=asmGraph[b][c]['etype'][c]
-                    if b!=c and asmGraph.has_edge(a,c) and asmGraph[a][c]['etype'][c] == bc_ctype and asmGraph[a][c]['etype'][a] == ab_atype and len(asmGraph.nodes[b]['outedges'])==1 and len(asmGraph.nodes[b]['inedges'])==1: # and c in asmContigs:
+                    if b!=c and asmGraph.has_edge(a,c) and asmGraph[a][c]['etype'][c] == bc_ctype and asmGraph[a][c]['etype'][a] == ab_atype and len(asmGraph.nodes[b]['outedges'])==1 and len(asmGraph.nodes[b]['inedges'])==1:
                         removeEdgeSet.add((a,c))
                         asmGraph[a][b]['nreads']+=asmGraph[a][c]['nreads']
                         asmGraph[b][c]['nreads']+=asmGraph[a][c]['nreads']
@@ -141,13 +140,6 @@ def estimate_n50(asmGraph):
     return pl
 
 
-def getRefPos(ctgname):
-    if not ctgname.startswith("sberry|"):
-        refid,pos=ctgname.rsplit('_',1)
-        return (refid,int(pos))
-    refid,pos,_,_=ctgname.split('|',1)[1].rsplit('_',3)
-    return (refid,int(pos))
-
 
 class Scaffolder(object):
 
@@ -202,6 +194,12 @@ class Scaffolder(object):
                     # TODO: handle case where a read have alignments different to DOVETAIL
         return read2contigs
 
+    def _getRefPos(self,ctg_id):
+        ctg_info = self.ctgInfo[ctg_id]
+        if ctg_info['phased'] == 'true':
+            return (ctg_info['reference'],int(ctg_info['ps']))
+        return (ctg_info['reference'],int(ctg_info['start']))
+
     # Run the scaffolding procedure
     def run(self):
 
@@ -210,15 +208,27 @@ class Scaffolder(object):
             return False
 
         # retrieve identifiers and put not-phased/assembled contigs in two different sets
-        ctgSeq={ ctg.id:str(ctg.seq) for ctg in SeqIO.parse(self.fasta,'fasta') }
-        ctgDict={ ctg_id:len(ctg_seq) for ctg_id,ctg_seq in ctgSeq.items() }
-        npContigs={ ctg:ctglen for ctg,ctglen in ctgDict.items() if not ctg.startswith('sberry|') }
-        asmContigs={ ctg:ctglen for ctg,ctglen in ctgDict.items() if ctg.startswith('sberry|') }
+        self.ctgInfo={}
+        self.ctgSeq={}
+        self.npContigs={}  #TODO: remove this and use only self.ctgInfo
+        self.asmContigs={} #TODO: remove this and use only self.ctgInfo
+        for rec in SeqIO.parse(self.fasta,'fasta'):
+            self.ctgInfo[rec.id] = { key:val for key,val in (x.split('=') for x in rec.description.split() if '=' in x) }
+            self.ctgSeq[rec.id] = str(rec.seq)
+            if self.ctgInfo[rec.id]['phased'] == 'true':
+                self.asmContigs[rec.id] = len(rec.seq)
+            else:
+                self.npContigs[rec.id] = len(rec.seq)
+
+        #ctgSeq={ ctg.id:str(ctg.seq) for ctg in SeqIO.parse(self.fasta,'fasta') }
+        #ctgDict={ ctg_id:len(ctg_seq) for ctg_id,ctg_seq in ctgSeq.items() }
+        #npContigs={ ctg:ctglen for ctg,ctglen in ctgDict.items() if not ctg.startswith('sberry|') }
+        #asmContigs={ ctg:ctglen for ctg,ctglen in ctgDict.items() if ctg.startswith('sberry|') }
 
         psDict=defaultdict(list)
         psAdjSet=set()
-        for ctg in asmContigs.keys():
-            ps=getRefPos(ctg)
+        for ctg in self.asmContigs.keys():
+            ps=self._getRefPos(ctg)
             refid,pos=ps
             psDict[refid].append(ps)
         for refid in psDict:
@@ -233,7 +243,7 @@ class Scaffolder(object):
                         psAdjSet.add( (ps_i,ps_j) )
                         psAdjSet.add( (ps_j,ps_i) )
 
-        fragList=sorted(map(getRefPos,ctgDict.keys()))
+        fragList=sorted(map(self._getRefPos,self.ctgInfo.keys()))
         fragAdjSet=set()
         refEnds=defaultdict(set)
         for i,frag in enumerate(fragList):
@@ -251,10 +261,10 @@ class Scaffolder(object):
 
         # create graph and contig->node_id mapping
         asmGraph=nx.Graph(style="filled")
-        asmGraph.add_nodes_from(list(npContigs.keys()),ctgtype='notphased')
-        asmGraph.add_nodes_from(list(asmContigs.keys()),ctgtype='assembled')
-        nx.set_node_attributes(asmGraph,npContigs,name='length')
-        nx.set_node_attributes(asmGraph,asmContigs,name='length')
+        asmGraph.add_nodes_from(list(self.npContigs.keys()),ctgtype='notphased')
+        asmGraph.add_nodes_from(list(self.asmContigs.keys()),ctgtype='assembled')
+        nx.set_node_attributes(asmGraph,self.npContigs,name='length')
+        nx.set_node_attributes(asmGraph,self.asmContigs,name='length')
         for n in asmGraph.nodes:
             asmGraph.nodes[n]['outedges']=set()
             asmGraph.nodes[n]['inedges']=set()
@@ -263,7 +273,7 @@ class Scaffolder(object):
         print_status(f'N50-before: {estimate_n50(asmGraph)}')
 
         for n in asmGraph.nodes:
-            if n in asmContigs:
+            if n in self.asmContigs:
                 asmGraph.nodes[n]['style']='filled'
                 asmGraph.nodes[n]['fillcolor']=f'/set312/1'
         
@@ -278,18 +288,18 @@ class Scaffolder(object):
                 if a==b and atype==btype:
                     continue
                 # avoid linking certain type of contigs
-                afrag=getRefPos(a)
+                afrag=self._getRefPos(a)
                 aref=afrag[0]
-                bfrag=getRefPos(b)
+                bfrag=self._getRefPos(b)
                 bref=bfrag[0]
                 is_reflink=(afrag,bfrag) in psAdjSet|fragAdjSet
-                is_singlink=(a in asmContigs and len(refEnds[bref])==1) or (b in asmContigs and len(refEnds[aref])==1)
+                is_singlink=(a in self.asmContigs and len(refEnds[bref])==1) or (b in self.asmContigs and len(refEnds[aref])==1)
                 is_endlink=(afrag in refEnds[aref] and bfrag in refEnds[bref])
                 if is_reflink or is_singlink or is_endlink:
                     if not asmGraph.has_edge(a,b):
                         asmGraph.add_edge(a,b,nreads=0,etype={a:atype,b:btype},label="0",overlaps=[],color="black") # FIXME: assuming no self-loops or loops of size 2
                         asmGraph[a][b]['ctglink']=set()
-                        if a in asmContigs and b in asmContigs and (getRefPos(a),getRefPos(b)) in psAdjSet:
+                        if a in self.asmContigs and b in self.asmContigs and (self._getRefPos(a),self._getRefPos(b)) in psAdjSet:
                             asmGraph[a][b]['color']="red"
                         if atype == MappingType.DOVETAIL_SUFFIX:
                             asmGraph.nodes[a]['outedges'].add(b)
@@ -307,7 +317,7 @@ class Scaffolder(object):
 
         nx.nx_agraph.to_agraph(asmGraph).write(f'{self.prefix}.raw.dot')
         
-        asmGraph=remove_simple_transitive_edges(asmGraph,asmContigs,npContigs)
+        asmGraph=remove_simple_transitive_edges(asmGraph)
         nx.nx_agraph.to_agraph(asmGraph).write(f'{self.prefix}.simplified.dot')
         
         asmGraph=remove_weak_edges(asmGraph,self.min_nreads,self.min_read_frac)
@@ -316,7 +326,7 @@ class Scaffolder(object):
         print_status(f'connected-components: {len(list(nx.connected_components(asmGraph)))}')
         print_status(f'N50-after: {estimate_n50(asmGraph)}')
 
-        scaffolds=build_scaffolds(asmGraph,ctgSeq)
+        scaffolds=build_scaffolds(asmGraph,self.ctgSeq)
         with open(self.scaffold_file,'w') as of:
             for i,scaff in enumerate(scaffolds,1):
                 of.write(f'>scaffold_{i}\n')

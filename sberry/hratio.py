@@ -29,7 +29,7 @@ def average_contig_hratio( bamfile, ctg, ps_list, min_read_overlap=3000):
             ps_end=phaseset.end()
             ps_positions=set(phaseset.positions)
             phaseset.creads=defaultdict(CondensedRead)
-            for pileupcol in bam.pileup(reference=ctg, start=ps_start, stop=ps_end, min_base_quality=20, ignore_overlaps=False, stepper='all'):
+            for pileupcol in bam.pileup(reference=ctg, start=ps_start, stop=ps_end, min_base_quality=0, ignore_overlaps=False, stepper='all'):
                 pos=pileupcol.reference_pos
                 if pos not in ps_positions: # FIXME: this could be done more efficiently
                     continue
@@ -59,8 +59,7 @@ def average_contig_hratio( bamfile, ctg, ps_list, min_read_overlap=3000):
     return (ctg,ctg_hratio)
 
 
-def average_hratio( bamfile:str, psc:PhasesetCollection, 
-        snv_dens:float = None, nproc: int = 1 ):
+def average_hratio( bamfile:str, psc:PhasesetCollection, nproc:int = 1 ):
 
     references = psc.references()
 

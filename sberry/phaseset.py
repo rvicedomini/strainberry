@@ -11,6 +11,9 @@ class Phaseset:
         self.psid = None
         self.positions = []
         self.haplo = defaultdict(list)
+
+    def id(self):
+        return self.psid
     
     def start(self):
         return self.positions[0]
@@ -35,15 +38,22 @@ class PhasedPosition:
         self.gtypes = call.gt_bases.split('|')
 
 
+def _PhasesetDict():
+    return defaultdict(Phaseset)
+
+
 class PhasesetCollection:
 
     def __init__(self):
-        self.psdict=defaultdict(lambda:defaultdict(Phaseset))
+        self.psdict=defaultdict(_PhasesetDict)
+
+    def __contains__(self, contig):
+        return (contig in self.psdict)
 
     def load_from_vcf(self,vcffile,min_density=0.0):
         # load phased positions from the input VCF file
         phased_positions = []
-        with open(vcffile,'rb') as fp:
+        with open(vcffile,'r') as fp:
             vcf_reader=vcf.Reader(fp)
             phased_positions = sorted( (PhasedPosition(rec) for rec in vcf_reader if rec.samples[0].phased),
                     key=lambda pp:(pp.reference,pp.psid,pp.position) )
@@ -60,6 +70,9 @@ class PhasesetCollection:
             for ps_id in [ ps_id for ps_id,phaseset in psd.items() if 100.0 * phaseset.density() < min_density ]:
                 del psd[ps_id]
 
+    def update(self,other):
+        return self.psdict.update(other.psdict)
+
     def size(self):
         return sum(len(ps) for ps in self.psdict.values())
 
@@ -67,8 +80,9 @@ class PhasesetCollection:
         return list(self.psdict.keys())
 
     def phasesets(self,reference:str) -> List[Phaseset]:
-        return list(self.psdict.get(reference).values())
+        return list(self.psdict[reference].values())
 
     def phaseset(self,reference:str,psid:str) -> Phaseset:
         return self.psdict[reference].get(psid) if reference in self.psdict else None
+
 

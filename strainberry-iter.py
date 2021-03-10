@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import sys,os,argparse,subprocess
-import pysam
 
 from sberry.utils import *
 from sberry.separate import LongshotReadSeparator
 from sberry.phaseset import PhasesetCollection
 from sberry.hratio import average_hratio
+from sberry.assemble import WtdbgAssembler
 from sberry.scaffolder import Scaffolder
 from sberry.__version__ import __version__
 
@@ -37,13 +37,17 @@ def main(argv=None):
     optional_args.add_argument('-q','--qual', dest='QUAL', metavar='int', type=int, default=50, help='Consider only variants with a minimum QUAL value [%(default)s]')
     optional_args.add_argument('-s','--snv-density', dest='SNV_DENSITY', metavar='float', type=float, default=0.1, help='Minimum SNV percentage to consider haplotype blocks [%(default)s]')
     optional_args.add_argument('-c','--cpus', dest='CPUS', metavar='int', type=int, default=1, help='Maximum number of CPUs to be used [%(default)s]')
-    optional_args.add_argument('--ont','--nanopore', dest='ONT', action='store_true', help='Input consists of Oxford Nanopore raw reads')
+    optional_args.add_argument('--nanopore', dest='ONT', action='store_true', help='Input consists of Oxford Nanopore raw reads')
     #optional_args.add_argument('--freebayes', dest='FREEBAYES', action='store_true', help='Use freebayes with default parameters instead Longshot for variant calling (SLOWER)')
     other_args = parser.add_argument_group('Other arguments')
     other_args.add_argument('-h','--help', action='help', help='Show this help message and exit')
     other_args.add_argument('-V','--version', action='version', version=f'Strainberry {_version()}', help='Show version number and exit')
     other_args.add_argument('-v','--verbose', dest='VERBOSE', action='count', default=0, help='Verbose output')
     opt = parser.parse_args()
+
+    print_status(f'Starting Strainberry v{_version()}')
+    if opt.VERBOSE > 0:
+        print_status(f'parameters: -n {opt.STRAINS} -q {opt.QUAL} -s {opt.SNV_DENSITY} -c {opt.CPUS} {opt.ONT}')
 
     validParameters=True
     if not os.path.isfile(opt.FASTA):
@@ -74,10 +78,6 @@ def main(argv=None):
     if not os.path.isdir(opt.OUTDIR):
         os.makedirs(opt.OUTDIR,exist_ok=True)
 
-    print_status(f'Starting Strainberry v{_version()}')
-    if opt.VERBOSE > 0:
-        print_status(f'parameters: -n {opt.STRAINS} -q {opt.QUAL} -s {opt.SNV_DENSITY} -c {opt.CPUS} {opt.ONT}')
-
     nsep=2
     hratio=1.0
     bamfile=opt.BAM
@@ -89,44 +89,44 @@ def main(argv=None):
         out_dir = os.path.join(opt.OUTDIR,f'strainberry_n{nsep}')
         os.makedirs(out_dir,exist_ok=True)
 
-        # SNP calling, phasing, and read separation
-        print_status(f'separating reads')
-        longshot = LongshotReadSeparator(fastafile,bamfile,out_dir,qual=opt.QUAL,nproc=opt.CPUS)
-        if not longshot.run():
-            print_error(f'read separation failed')
+        # SNP calling and phasing
+        print_status(f'SNP calling and phasing')
+        longshot = LongshotReadSeparator(fastafile,bamfile,out_dir,snv_dens=opt.SNV_DENSITY,qual=opt.QUAL,nproc=opt.CPUS)
+        if not longshot.phase_and_tag():
+            print_error(f'haplotype phasing failed')
             return 2
-
-        psc = PhasesetCollection()
-        psc.load_from_vcf(longshot.phased_vcf,opt.SNV_DENSITY)
-
-        new_hratio,num_phasesets,nreads=average_hratio(bamfile,psc,snv_dens=opt.SNV_DENSITY,nproc=opt.CPUS)
-        print_status(f'hratio={new_hratio} |phasesets|={num_phasesets} nreads={nreads}')
+        psc = longshot.psc
+        
+        # check if new iteration would be needed
+        new_hratio,num_phasesets,nreads=average_hratio(bamfile,psc,nproc=opt.CPUS)
+        print_status(f'hratio={new_hratio:.4f} |phasesets|={num_phasesets} nreads={nreads}')
         if num_phasesets == 0:
             print_status(f'no more regions to separate')
             print_status(f'best separation available at: {fastafile}')
             break
         if nsep > 2 and (new_hratio > hratio or (hratio-new_hratio) < 0.1*hratio):
-            print_status(f'average Hamming ratio did not improve enough: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
+            print_status(f'average Hamming ratio did not improve enough: {hratio:.4f} -> {new_hratio:.4f}')
             print_status(f'best separation available at: {fastafile}')
             break
-        print_status(f'average Hamming ratio improved: {hratio:.4f} -> ({new_hratio:.4f},{nreads})')
+        print_status(f'average Hamming ratio improved: {hratio:.4f} -> {new_hratio:.4f}')
         hratio=new_hratio
 
-        # Haplotype assembly
-        sberry_assemble_cmd = [ os.path.join(sberry_root,'sberry-assemble'),
-                '-r', fastafile,
-                '-b', longshot.tagged_dir,
-                '-v', longshot.phased_vcf,
-                '-o', out_dir,
-                '-s', f'{opt.SNV_DENSITY}',
-                '-t', f'{opt.CPUS}',
-                '--nanopore' if opt.ONT else '' ]
-        if subprocess.run(sberry_assemble_cmd).returncode != 0:
-            print_error(f'sberry-assemble command failed')
+        # read separation
+        print_status(f'separating reads')
+        if not longshot.separate_reads():
+            print_error(f'read separation failed')
             return 2
+        reads_dir = longshot.reads_dir
+        hap_set = longshot.hap_set
+
+        # Haplotype assembly
+        print_status(f'assembling strain haplotypes')
+        assembly_dir = os.path.join(out_dir,'20-assembly')
+        wtdbg = WtdbgAssembler(fastafile,psc,hap_set,reads_dir,assembly_dir,is_ont=opt.ONT,nproc=opt.CPUS)
+        wtdbg.run()
 
         # Scaffolding
-        contigfile=os.path.join(out_dir,'assembly.contigs.fa')
+        contigfile=wtdbg.contig_file
         scaffolder = Scaffolder(contigfile,bamfile,out_dir,is_ont=opt.ONT,nproc=opt.CPUS)
         if not scaffolder.run():
             print_error(f'scaffolding failed')
