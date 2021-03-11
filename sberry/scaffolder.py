@@ -66,38 +66,44 @@ def remove_weak_edges(asmGraph,minReads=10,minReadFrac=0.9):
 def build_scaffolds(asmGraph,ctgSeq):
     visited=set()
     out_scaffolds=[]
+    out_desc=[]
     for a in asmGraph.nodes:
         if a not in visited:
             visited.add(a)
             aseq=ctgSeq[a]
+            adesc=[(a,0)]
             outedges=asmGraph.nodes[a]['outedges']
             if len(outedges)==1 and list(outedges)[0] not in visited:
                 for b in asmGraph.nodes[a]['outedges']:
                     edata=asmGraph[a][b]
                     atype=edata['etype'][a]
                     btype=edata['etype'][b]
-                    bseq=build_scaffold_from(b,btype,asmGraph,ctgSeq,visited)
+                    bseq,bdesc=build_scaffold_from(b,btype,asmGraph,ctgSeq,visited)
                     ab_gap=int(median(edata["overlaps"]))
                     ab_gap=-ab_gap if ab_gap<0 else 0
                     aseq+=(ab_gap*'N') + (bseq if atype!=btype else reverse_complement(bseq))
+                    adesc.extend( bdesc if atype!=btype else ((b,1-rc) for b,rc in reversed(bdesc)) )
             inedges=asmGraph.nodes[a]['inedges']
             if len(inedges)==1 and list(inedges)[0] not in visited:
                 for b in asmGraph.nodes[a]['inedges']:
                     edata=asmGraph[a][b]
                     atype=edata['etype'][a]
                     btype=edata['etype'][b]
-                    bseq=build_scaffold_from(b,btype,asmGraph,ctgSeq,visited)
+                    bseq,bdesc=build_scaffold_from(b,btype,asmGraph,ctgSeq,visited)
                     ab_gap=int(median(edata["overlaps"]))
                     ab_gap=-ab_gap if ab_gap<0 else 0
                     aseq=(bseq if atype!=btype else reverse_complement(bseq)) + (ab_gap*'N') + aseq
+                    adesc=(bdesc if atype!=btype else [(b,1-rc) for b,rc in reversed(bdesc)]) + adesc
             out_scaffolds.append(aseq)
-    return out_scaffolds
+            out_desc.append(adesc)
+    return out_scaffolds,out_desc
 
 # TODO: AVOID RECURSION => MAKE IT ITERATIVE; also there are maybe too many reverse complement operations
 def build_scaffold_from(a,atype,asmGraph,ctgSeq,visited):
     # assuming this function is called on an unvisited node
     visited.add(a)
     aseq=ctgSeq[a]
+    adesc=[(a,0)]
     if atype == MappingType.DOVETAIL_PREFIX:
         outedges=asmGraph.nodes[a]['outedges']
         if len(outedges) == 1 and list(outedges)[0] not in visited:
@@ -105,10 +111,11 @@ def build_scaffold_from(a,atype,asmGraph,ctgSeq,visited):
                 edata=asmGraph[a][b]
                 atype=edata['etype'][a]
                 btype=edata['etype'][b]
-                bseq=build_scaffold_from(b,btype,asmGraph,ctgSeq,visited)
+                bseq,bdesc=build_scaffold_from(b,btype,asmGraph,ctgSeq,visited)
                 ab_gap=int(median(edata["overlaps"]))
                 ab_gap=-ab_gap if ab_gap<0 else 0
                 aseq+=(ab_gap*'N') + (bseq if atype!=btype else reverse_complement(bseq))
+                adesc.extend( bdesc if atype!=btype else ((b,1-rc) for b,rc in reversed(bdesc)) )
     elif atype == MappingType.DOVETAIL_SUFFIX:
         inedges=asmGraph.nodes[a]['inedges']
         if len(inedges)==1 and list(inedges)[0] not in visited:
@@ -116,11 +123,12 @@ def build_scaffold_from(a,atype,asmGraph,ctgSeq,visited):
                 edata=asmGraph[a][b]
                 atype=edata['etype'][a]
                 btype=edata['etype'][b]
-                bseq=build_scaffold_from(b,btype,asmGraph,ctgSeq,visited)
+                bseq,bdesc=build_scaffold_from(b,btype,asmGraph,ctgSeq,visited)
                 ab_gap=int(median(edata["overlaps"]))
                 ab_gap=-ab_gap if ab_gap<0 else 0
                 aseq=(bseq if atype!=btype else reverse_complement(bseq)) + (ab_gap*'N') + aseq
-    return aseq
+                bdesc=(bdesc if atype!=btype else [(b,1-rc) for b,rc in reversed(bdesc)]) + adesc
+    return aseq,adesc
 
 
 def estimate_n50(asmGraph):
@@ -156,6 +164,7 @@ class Scaffolder(object):
         self.nproc=nproc
         # output paths
         self.scaffold_file=os.path.join(outdir,'assembly.scaffolds.fa')
+        self.scaffold_info_file=os.path.join(outdir,'assembly.scaffolds.info.tsv')
         self.scaffold_dir=os.path.join(outdir,'30-scaffolds')
         self.pafgz=os.path.join(self.scaffold_dir,'alignment.paf.gz')
         self.prefix=os.path.join(self.scaffold_dir,'scaffolds')
@@ -326,11 +335,16 @@ class Scaffolder(object):
         print_status(f'connected-components: {len(list(nx.connected_components(asmGraph)))}')
         print_status(f'N50-after: {estimate_n50(asmGraph)}')
 
-        scaffolds=build_scaffolds(asmGraph,self.ctgSeq)
-        with open(self.scaffold_file,'w') as of:
-            for i,scaff in enumerate(scaffolds,1):
-                of.write(f'>scaffold_{i}\n')
-                of.write(f'{insert_newlines(scaff)}\n')
+        scaffolds,scf_info=build_scaffolds(asmGraph,self.ctgSeq)
+        with open(self.scaffold_file,'w') as scf_fh, open(self.scaffold_info_file,'w') as info_fh:
+            for i,scf in enumerate(scaffolds):
+                scf_id = f'scaffold_{i+1}'
+                scf_fh.write(f'>{scf_id}\n')
+                scf_fh.write(f'{insert_newlines(scf)}\n')
+                for ctg_id,rev in scf_info[i]:
+                    record = [ scf_id, ctg_id, '+' if rev==0 else '-' ]
+                    record.extend(f'{key}={val}' for key,val in self.ctgInfo[ctg_id].items())
+                    info_fh.write('\t'.join(record) + '\n')
 
         return True
 
