@@ -1,5 +1,5 @@
 from typing import List
-from collections import defaultdict,namedtuple
+from collections import defaultdict
 
 import vcf
 
@@ -23,6 +23,9 @@ class Phaseset:
 
     def density(self):
         return len(self.positions)/(self.end()-self.start())
+
+    def __len__(self):
+        return self.end()-self.start() if len(self.positions)>0 else 0
 
     def __repr__(self):
         return f'Phaseset( ref={self.reference}, id={self.psid}, |positions|={len(self.positions)}, density={self.density():.4f} )'
@@ -50,7 +53,7 @@ class PhasesetCollection:
     def __contains__(self, contig):
         return (contig in self.psdict)
 
-    def load_from_vcf(self,vcffile,min_density=0.0):
+    def load_from_vcf(self,vcffile,min_density=0.0,min_length=0):
         # load phased positions from the input VCF file
         phased_positions = []
         with open(vcffile,'r') as fp:
@@ -67,7 +70,7 @@ class PhasesetCollection:
                 phaseset.haplo[i].append(gt)
         # remove phaset with too few SNVs
         for ref,psd in self.psdict.items():
-            for ps_id in [ ps_id for ps_id,phaseset in psd.items() if 100.0 * phaseset.density() < min_density ]:
+            for ps_id in [ps_id for ps_id,phaseset in psd.items() if len(phaseset) < min_length or 100.0 * phaseset.density() < min_density]:
                 del psd[ps_id]
 
     def update(self,other):
