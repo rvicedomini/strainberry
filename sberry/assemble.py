@@ -122,7 +122,7 @@ class WtdbgAssembler(object):
                     start=phaseset.end()
                     i+=1
                     while i < len(ps_list) and ps_list[i].start() <= start:
-                        start=max(start,ps_list[i])
+                        start=max(start,ps_list[i].end())
                         i+=1
                 ctg_len=len(fadict[ctg])
                 if ctg_len-start >= self.min_unphased_len:
