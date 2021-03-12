@@ -1,4 +1,4 @@
-import sys,os,shutil,gzip
+import sys,os,shutil,gzip,operator
 import subprocess,multiprocessing
 from collections import defaultdict
 
@@ -9,7 +9,6 @@ from sberry.phaseset import Phaseset,PhasesetCollection
 
 
 # TODO:
-# output logging information from longshot processes
 # check if files exist
 
 class LongshotReadSeparator(object):
@@ -56,30 +55,41 @@ class LongshotReadSeparator(object):
             if longshot.returncode == 0 and os.path.isfile(ctg_bamfile):
                 if subprocess.run(['samtools','index',ctg_bamfile]).returncode != 0:
                     print_error(f'cannot index bam file {ctg_bamfile}')
+            elif longshot.returncode != 0:
+                print_error(f'calling and phasing failed for sequence {contig}, check log at {ctg_logfile}')
             return longshot.returncode
 
-    def _update_extracted_reads(self,hap_nreads):
-        self.hap_set.update( hap_id for hap_id,nreads in hap_nreads.items() if nreads >= self.min_nreads )
+    def _update_extracted_reads(self,result):
+        hap_nreads,ps_nreads=result
+        #self.hap_set.update( hap_id for hap_id,nreads in hap_nreads.items() if nreads >= self.min_nreads )
+        for hap_id in ( hap_id for hap_id,nreads in hap_nreads.items() if nreads >= self.min_nreads ):
+            ref_id,ps_id,_ = hap_id
+            self.hap_set.add(hap_id)
+            phaseset = self.psc.phaseset(ref_id,ps_id)
+            phaseset.nreads_tagged += hap_nreads[hap_id]
+            phaseset.nreads_mapped = ps_nreads
 
     def _extract_tagged_reads(self,ctg_bamfile,phaseset):
         hap_files={}
         hap_nreads=defaultdict(int)
+        ps_nreads=0
         with pysam.AlignmentFile(ctg_bamfile,'rb') as bam:
             for read in bam.fetch( phaseset.reference, start=phaseset.start(), stop=phaseset.end() ):
                 # TODO: is the following really necessary?
                 if read.is_unmapped or read.is_secondary or read.is_supplementary:
                     continue
                 if read.has_tag('PS') and f'{read.get_tag("PS")}' == phaseset.psid:
-                    hp_tag=read.get_tag("HP")
-                    hap_id=(phaseset.reference,phaseset.psid,f'{hp_tag}')
+                    hp_tag=f'{read.get_tag("HP")}'
+                    hap_id=(phaseset.reference,phaseset.psid,hp_tag)
                     if not hap_id in hap_files:
                         hap_filename=f'{phaseset.reference}_{phaseset.psid}_h{hp_tag}.fa.gz'
                         hap_files[hap_id]=gzip.open(os.path.join(self.reads_dir,hap_filename),'wt')
                     hap_files[hap_id].write(f'>{read.query_name}\n{read.query_sequence}\n')
                     hap_nreads[hap_id]+=1
+                ps_nreads+=1
         for fh in hap_files.values():
             fh.close()
-        return hap_nreads
+        return hap_nreads,ps_nreads
 
     def phase_and_tag(self):
         # load contig IDs and lengths
@@ -89,7 +99,7 @@ class LongshotReadSeparator(object):
                 self.contigs[ctg_id]=int(ctg_len)
         # run longshot in parallel for each contig
         with multiprocessing.Pool(processes=self.nproc,maxtasksperchild=1) as pool:
-            results = [ pool.apply_async(self._run_longshot, args=(ctg,)) for ctg in self.contigs ]
+            results = [ pool.apply_async(self._run_longshot, args=(ctg,)) for ctg,_ in sorted(self.contigs.items(),key=operator.itemgetter(1),reverse=True) ]
             pool.close()
             if any( r.get() != 0 for r in results ):
                 print_error(f'error running {self.LONGSHOT_BIN}')
