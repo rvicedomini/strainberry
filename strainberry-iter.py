@@ -5,7 +5,7 @@ import sys,os,argparse,subprocess
 from sberry.utils import *
 from sberry.separate import LongshotReadSeparator
 from sberry.phaseset import PhasesetCollection
-from sberry.hratio import average_hratio
+from sberry.hratio import AverageHammingRatio
 from sberry.assemble import WtdbgAssembler
 from sberry.scaffolder import Scaffolder
 from sberry.__version__ import __version__
@@ -79,9 +79,11 @@ def main(argv=None):
         os.makedirs(opt.OUTDIR,exist_ok=True)
 
     nsep=2
-    hratio=1.0
+    sep_hratio=1.0
+    prev_ahr=None
     bamfile=opt.BAM
     fastafile=opt.FASTA
+    scaffold_infofile=None
     while nsep <= opt.STRAINS:
 
         print_status(f'### performing {nsep}-strain separation')
@@ -96,21 +98,53 @@ def main(argv=None):
             print_error(f'haplotype phasing failed')
             return 2
         psc = longshot.psc
-        
-        # check if new iteration would be needed
-        new_hratio,num_phasesets,nreads=average_hratio(bamfile,psc,nproc=opt.CPUS)
+
+        new_ahr = AverageHammingRatio()
+        new_hratio,num_phasesets,nreads=new_ahr.compute(bamfile,psc,nproc=opt.CPUS)
+
+        with open(os.path.join(out_dir,'10-separation','reference.ahr.tsv'), 'w') as ofh:
+            for ref_id in new_ahr.ahrdict:
+                ref_hratio,ref_nreads = new_ahr.reference_average_hratio(ref_id)
+                ofh.write(f'{ref_id}\t{ref_hratio:.4f}\t{ref_nreads}\n')
+
         print_status(f'hratio={new_hratio:.4f} |phasesets|={num_phasesets} nreads={nreads}')
         if num_phasesets == 0:
-            print_status(f'no more regions to separate')
+            print_status(f'no regions to separate')
             print_status(f'best separation available at: {fastafile}')
             break
-        if nsep > 2 and (new_hratio > hratio or (hratio-new_hratio) < 0.1*hratio):
-            print_status(f'average Hamming ratio did not improve enough: {hratio:.4f} -> {new_hratio:.4f}')
-            print_status(f'best separation available at: {fastafile}')
-            break
-        print_status(f'average Hamming ratio improved: {hratio:.4f} -> {new_hratio:.4f}')
-        hratio=new_hratio
 
+        # check if current iteration improves average hamming ratio
+        if nsep > 2 and (new_hratio > sep_hratio or (sep_hratio-new_hratio) < 0.1*sep_hratio):
+            print_status(f'average Hamming ratio did not improve enough: {sep_hratio:.4f} -> {new_hratio:.4f}')
+            print_status(f'best separation available at: {fastafile}')
+            break
+        print_status(f'average Hamming ratio improved: {sep_hratio:.4f} -> {new_hratio:.4f}')
+        sep_hratio=new_hratio
+        
+        # remove phasesets that would not improve hamming ratio of a reference sequence
+        if nsep > 2:
+            scf_ahr={}
+            with open(scaffold_infofile,'r') as ifh:
+                for line in ifh:
+                    rec=line.split('\t')
+                    scf_id=rec[0]
+                    ctg_info={ key:val for key,val in (x.split('=') for x in rec[3:]) }
+                    if ctg_info['phased']=='true':
+                        ref_hratio,ref_nreads=prev_ahr.phaseset_average_hratio(ctg_info['reference'],ctg_info['ps'])
+                        scf_hratio,scf_nreads=scf_ahr[scf_id] if scf_id in scf_ahr else (1.0,0)
+                        scf_ahr[scf_id] = ( (scf_hratio*scf_nreads+ref_hratio*ref_nreads)/(scf_nreads+ref_nreads), (scf_nreads+ref_nreads) )
+            with open(os.path.join(out_dir,'scaffolds.retained.txt'),'w') as ret_fh, open(os.path.join(out_dir,'scaffolds.filtered.txt'),'w') as flt_fh:
+                for scf_id in new_ahr.ahrdict:
+                    new_scf_hratio,new_scf_nreads = new_ahr.reference_average_hratio(scf_id)
+                    pre_scf_hratio,pre_scf_nreads = scf_ahr[scf_id] if scf_id in scf_ahr else (1.0,0)
+                    if new_scf_hratio > pre_scf_hratio or (pre_scf_hratio-new_scf_hratio < 0.1*pre_scf_hratio):
+                        flt_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
+                        psc.remove_reference(scf_id)
+                        continue
+                    ret_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
+
+        prev_ahr=new_ahr
+        
         # read separation
         print_status(f'separating reads')
         if not longshot.separate_reads():
@@ -118,6 +152,15 @@ def main(argv=None):
             return 2
         reads_dir = longshot.reads_dir
         hap_set = longshot.hap_set
+
+        # print Phaseset statistics
+        with open(os.path.join(out_dir,'10-separation','phaseset.stats.tsv'), 'w') as ofh:
+            for ref_id in psc.references():
+                for ps in psc.phasesets(ref_id):
+                    nreads_ratio = ps.nreads_tagged/ps.nreads_mapped if ps.nreads_mapped > 0 else 0.0
+                    record = [ ps.reference, ps.psid, str(ps.start()), str(ps.end()), f'{100.0*ps.density():.2f}',
+                               str(ps.nreads_tagged), str(ps.nreads_mapped), f'{nreads_ratio:.4f}' ]
+                    ofh.write('\t'.join(record) + '\n')
 
         # Haplotype assembly
         print_status(f'assembling strain haplotypes')
@@ -150,6 +193,7 @@ def main(argv=None):
         # update file names for next iteration
         bamfile=os.path.join(out_dir,'assembly.scaffolds.bam')
         fastafile=scaffolder.scaffold_file
+        scaffold_infofile=scaffolder.scaffold_info_file
 
         # Index BAM and FASTA files for the next iteration
         if subprocess.run(['samtools','index',f'-@{min(4,opt.CPUS)}',bamfile]).returncode != 0:
