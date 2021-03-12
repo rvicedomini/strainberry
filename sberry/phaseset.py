@@ -11,6 +11,8 @@ class Phaseset:
         self.psid = None
         self.positions = []
         self.haplo = defaultdict(list)
+        self.nreads_tagged = 0 # number of tagged primary alignments covering the phaseset
+        self.nreads_mapped = 0 # number of primary alignments covering the phaseset
 
     def id(self):
         return self.psid
@@ -28,7 +30,7 @@ class Phaseset:
         return self.end()-self.start() if len(self.positions)>0 else 0
 
     def __repr__(self):
-        return f'Phaseset( ref={self.reference}, id={self.psid}, |positions|={len(self.positions)}, density={self.density():.4f} )'
+        return f'Phaseset( ref={self.reference}, id={self.psid}, |positions|={len(self.positions)}, density={self.density():.4f} tagged={self.nreads_tagged} mapped={self.nreads_mapped} )'
 
 
 class PhasedPosition:
@@ -68,13 +70,19 @@ class PhasesetCollection:
             phaseset.positions.append(pp.position)
             for i,gt in enumerate(pp.gtypes):
                 phaseset.haplo[i].append(gt)
-        # remove phaset with too few SNVs
+        # remove phasets with too few SNVs
         for ref,psd in self.psdict.items():
             for ps_id in [ps_id for ps_id,phaseset in psd.items() if len(phaseset) < min_length or 100.0 * phaseset.density() < min_density]:
                 del psd[ps_id]
+        # remove references with no remaining phasesets
+        for ref in [ref for ref,psd in self.psdict.items() if len(psd)==0]:
+            del self.psdict[ref]
 
     def update(self,other):
         return self.psdict.update(other.psdict)
+
+    def remove_reference(self,reference):
+        del self.psdict[reference]
 
     def size(self):
         return sum(len(ps) for ps in self.psdict.values())
