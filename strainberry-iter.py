@@ -33,21 +33,21 @@ def main(argv=None):
     required_args.add_argument('-o','--out-dir', dest='OUTDIR', metavar='PATH', required=True, help='Output directory of Strainberry assemblies')
     # OPTIONAL ARGUMENTS
     optional_args = parser.add_argument_group('Optional arguments')
-    optional_args.add_argument('-n','--num-strains', dest='STRAINS', metavar='int', type=int, default=5, help='Attempt strain-separation at most for the provided strain multiplicity [%(default)s]')
-    optional_args.add_argument('-q','--qual', dest='QUAL', metavar='int', type=int, default=50, help='Consider only variants with a minimum QUAL value [%(default)s]')
+    optional_args.add_argument('--nanopore', dest='ONT', action='store_true', help='Input consists of Oxford Nanopore raw reads')
+    optional_args.add_argument('-n','--max-strains', dest='STRAINS', metavar='int', type=int, default=5, help='Attempt strain-separation at most for the provided strain multiplicity [%(default)s]')
     optional_args.add_argument('-s','--snv-density', dest='SNV_DENSITY', metavar='float', type=float, default=0.1, help='Minimum SNV percentage to consider haplotype blocks [%(default)s]')
     optional_args.add_argument('-c','--cpus', dest='CPUS', metavar='int', type=int, default=1, help='Maximum number of CPUs to be used [%(default)s]')
-    optional_args.add_argument('--nanopore', dest='ONT', action='store_true', help='Input consists of Oxford Nanopore raw reads')
-    #optional_args.add_argument('--freebayes', dest='FREEBAYES', action='store_true', help='Use freebayes with default parameters instead Longshot for variant calling (SLOWER)')
+    # OTHER ARGUMENTS
     other_args = parser.add_argument_group('Other arguments')
     other_args.add_argument('-h','--help', action='help', help='Show this help message and exit')
     other_args.add_argument('-V','--version', action='version', version=f'Strainberry {_version()}', help='Show version number and exit')
     other_args.add_argument('-v','--verbose', dest='VERBOSE', action='count', default=0, help='Verbose output')
+    other_args.add_argument('--debug', dest='DEBUG', action='store_true', help=argparse.SUPPRESS)
     opt = parser.parse_args()
 
     print_status(f'Starting Strainberry v{_version()}')
     if opt.VERBOSE > 0:
-        print_status(f'parameters: -n {opt.STRAINS} -q {opt.QUAL} -s {opt.SNV_DENSITY} -c {opt.CPUS} {opt.ONT}')
+        print_status(f'parameters: {"--nanopore" if opt.ONT else ""} -n {opt.STRAINS} -s {opt.SNV_DENSITY} -c {opt.CPUS}')
 
     validParameters=True
     if not os.path.isfile(opt.FASTA):
@@ -93,7 +93,7 @@ def main(argv=None):
 
         # SNP calling and phasing
         print_status(f'SNP calling and phasing')
-        longshot = LongshotReadSeparator(fastafile,bamfile,out_dir,snv_dens=opt.SNV_DENSITY,qual=opt.QUAL,nproc=opt.CPUS)
+        longshot = LongshotReadSeparator(fastafile,bamfile,out_dir,snv_dens=opt.SNV_DENSITY,nproc=opt.CPUS)
         if not longshot.phase_and_tag():
             print_error(f'haplotype phasing failed')
             return 2
@@ -133,15 +133,15 @@ def main(argv=None):
                         ref_hratio,ref_nreads=prev_ahr.phaseset_average_hratio(ctg_info['reference'],ctg_info['ps'])
                         scf_hratio,scf_nreads=scf_ahr[scf_id] if scf_id in scf_ahr else (1.0,0)
                         scf_ahr[scf_id] = ( (scf_hratio*scf_nreads+ref_hratio*ref_nreads)/(scf_nreads+ref_nreads), (scf_nreads+ref_nreads) )
-            with open(os.path.join(out_dir,'scaffolds.retained.txt'),'w') as ret_fh, open(os.path.join(out_dir,'scaffolds.filtered.txt'),'w') as flt_fh:
-                for scf_id in new_ahr.ahrdict:
-                    new_scf_hratio,new_scf_nreads = new_ahr.reference_average_hratio(scf_id)
-                    pre_scf_hratio,pre_scf_nreads = scf_ahr[scf_id] if scf_id in scf_ahr else (1.0,0)
-                    if new_scf_hratio > pre_scf_hratio or (pre_scf_hratio-new_scf_hratio < 0.1*pre_scf_hratio):
-                        flt_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
-                        psc.remove_reference(scf_id)
-                        continue
-                    ret_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
+            #with open(os.path.join(out_dir,'scaffolds.retained.txt'),'w') as ret_fh, open(os.path.join(out_dir,'scaffolds.filtered.txt'),'w') as flt_fh:
+            for scf_id in new_ahr.ahrdict:
+                new_scf_hratio,new_scf_nreads = new_ahr.reference_average_hratio(scf_id)
+                pre_scf_hratio,pre_scf_nreads = scf_ahr[scf_id] if scf_id in scf_ahr else (1.0,0)
+                if new_scf_hratio > pre_scf_hratio or (pre_scf_hratio-new_scf_hratio < 0.1*pre_scf_hratio):
+                    psc.remove_reference(scf_id)
+                    #flt_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
+                    #continue
+                #ret_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
 
         prev_ahr=new_ahr
         
@@ -154,13 +154,14 @@ def main(argv=None):
         hap_set = longshot.hap_set
 
         # print Phaseset statistics
-        with open(os.path.join(out_dir,'10-separation','phaseset.stats.tsv'), 'w') as ofh:
-            for ref_id in psc.references():
-                for ps in psc.phasesets(ref_id):
-                    nreads_ratio = ps.nreads_tagged/ps.nreads_mapped if ps.nreads_mapped > 0 else 0.0
-                    record = [ ps.reference, ps.psid, str(ps.start()), str(ps.end()), f'{100.0*ps.density():.2f}',
-                               str(ps.nreads_tagged), str(ps.nreads_mapped), f'{nreads_ratio:.4f}' ]
-                    ofh.write('\t'.join(record) + '\n')
+        if opt.DEBUG:
+            with open(os.path.join(out_dir,'10-separation','phaseset.stats.tsv'), 'w') as ofh:
+                for ref_id in psc.references():
+                    for ps in psc.phasesets(ref_id):
+                        nreads_ratio = ps.nreads_tagged/ps.nreads_mapped if ps.nreads_mapped > 0 else 0.0
+                        record = [ ps.reference, ps.psid, str(ps.start()), str(ps.end()), f'{100.0*ps.density():.2f}',
+                                   str(ps.nreads_tagged), str(ps.nreads_mapped), f'{nreads_ratio:.4f}' ]
+                        ofh.write('\t'.join(record) + '\n')
 
         # Haplotype assembly
         print_status(f'assembling strain haplotypes')
@@ -204,6 +205,15 @@ def main(argv=None):
             return 2
 
         nsep+=1
+
+    # no more iterations to perform: move last separation in the main output directory
+    if fastafile != opt.FASTA:
+        fastadir,fastaname=os.path.split(fastafile)
+        os.rename(fastafile,os.path.join(opt.OUTDIR,fastaname))
+        os.rename(f'{fastafile}.fai',os.path.join(opt.OUTDIR,f'{fastaname}.fai'))
+        bamdir,bamname=os.path.split(bamfile)
+        os.rename(bamfile,os.path.join(opt.OUTDIR,bamname))
+        os.rename(f'{bamfile}.bai',os.path.join(opt.OUTDIR,f'{bamname}.bai'))
 
     print_status('Strainberry finished successfully')
     return 0
