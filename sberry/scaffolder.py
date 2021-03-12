@@ -174,7 +174,7 @@ class Scaffolder(object):
     
     # Map input reads to input assembly
     def _align_reads(self):
-        print_status('mapping reads to strain-separated contigs')
+        #print_status('mapping reads to strain-separated contigs')
         with open(self.pafgz,'wb') as pafgz:
             samtools_fastq = subprocess.Popen([self.SAMTOOLS_BIN,'fastq',self.bam], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             minimap2_cmd = [ self.MINIMAP2_BIN, '-cx', 'map-ont' if self.is_ont else 'map-pb', '-t', f'{self.nproc}', self.fasta, '-' ]
@@ -278,8 +278,8 @@ class Scaffolder(object):
             asmGraph.nodes[n]['outedges']=set()
             asmGraph.nodes[n]['inedges']=set()
 
-        print_status(f'connected-components: {len(asmGraph.nodes)}')
-        print_status(f'N50-before: {estimate_n50(asmGraph)}')
+        #print_status(f'connected-components: {len(asmGraph.nodes)}')
+        #print_status(f'N50-before: {estimate_n50(asmGraph)}')
 
         for n in asmGraph.nodes:
             if n in self.asmContigs:
@@ -332,8 +332,8 @@ class Scaffolder(object):
         asmGraph=remove_weak_edges(asmGraph,self.min_nreads,self.min_read_frac)
         nx.nx_agraph.to_agraph(asmGraph).write(f'{self.prefix}.final.dot')
         
-        print_status(f'connected-components: {len(list(nx.connected_components(asmGraph)))}')
-        print_status(f'N50-after: {estimate_n50(asmGraph)}')
+        #print_status(f'connected-components: {len(list(nx.connected_components(asmGraph)))}')
+        #print_status(f'N50-after: {estimate_n50(asmGraph)}')
 
         scaffolds,scf_info=build_scaffolds(asmGraph,self.ctgSeq)
         with open(self.scaffold_file,'w') as scf_fh, open(self.scaffold_info_file,'w') as info_fh:
