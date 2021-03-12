@@ -39,7 +39,7 @@ class WtdbgAssembler(object):
             with gzip.open(filename,'rb') as f:
                 return len(f.read(1)) == 0
         except:
-            print_warning(f'{filename} is a bad gzip file')
+            #print_warning(f'{filename} is a bad gzip file')
             return True
 
     def _run_wtdbg2(self,hapid,fagz_file):
