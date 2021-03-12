@@ -13,7 +13,7 @@ from sberry.phaseset import Phaseset,PhasesetCollection
 
 class LongshotReadSeparator(object):
 
-    def __init__(self,fastafile,bamfile,outdir,rmtemp=False,snv_dens=0.1,ps_length=3000,min_nreads=10,qual=50,nproc=1):
+    def __init__(self,fastafile,bamfile,outdir,rmtemp=False,snv_dens=0.1,min_length=3000,min_nreads=10,nproc=1):
         self.LONGSHOT_BIN='longshot'
         self.SAMTOOLS_BIN='samtools'
         self.TABIX_BIN='tabix'
@@ -27,9 +27,8 @@ class LongshotReadSeparator(object):
         self.bam=bamfile
         self.rmtemp=rmtemp
         self.snv_dens=snv_dens
-        self.ps_length=ps_length
+        self.ps_length=min_length
         self.min_nreads=min_nreads
-        self.qual=qual
         self.nproc=nproc
         # output paths
         self.separation_dir=os.path.join(outdir,'10-separation')
