@@ -114,7 +114,7 @@ def main(argv=None):
             break
 
         # check if current iteration improves average hamming ratio
-        if nsep > 2 and (new_hratio > sep_hratio or (sep_hratio-new_hratio) < 0.1*sep_hratio):
+        if nsep > 2 and (new_hratio > sep_hratio or (sep_hratio-new_hratio) < 0.01*sep_hratio):
             print_status(f'average Hamming ratio did not improve enough: {sep_hratio:.4f} -> {new_hratio:.4f}')
             print_status(f'best separation available at: {fastafile}')
             break
@@ -133,15 +133,15 @@ def main(argv=None):
                         ref_hratio,ref_nreads=prev_ahr.phaseset_average_hratio(ctg_info['reference'],ctg_info['ps'])
                         scf_hratio,scf_nreads=scf_ahr[scf_id] if scf_id in scf_ahr else (1.0,0)
                         scf_ahr[scf_id] = ( (scf_hratio*scf_nreads+ref_hratio*ref_nreads)/(scf_nreads+ref_nreads), (scf_nreads+ref_nreads) )
-            #with open(os.path.join(out_dir,'scaffolds.retained.txt'),'w') as ret_fh, open(os.path.join(out_dir,'scaffolds.filtered.txt'),'w') as flt_fh:
-            for scf_id in new_ahr.ahrdict:
-                new_scf_hratio,new_scf_nreads = new_ahr.reference_average_hratio(scf_id)
-                pre_scf_hratio,pre_scf_nreads = scf_ahr[scf_id] if scf_id in scf_ahr else (1.0,0)
-                if new_scf_hratio > pre_scf_hratio or (pre_scf_hratio-new_scf_hratio < 0.1*pre_scf_hratio):
-                    psc.remove_reference(scf_id)
-                    #flt_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
-                    #continue
-                #ret_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
+            with open(os.path.join(out_dir,'scaffolds.retained.txt'),'w') as ret_fh, open(os.path.join(out_dir,'scaffolds.filtered.txt'),'w') as flt_fh:
+                for scf_id in new_ahr.ahrdict:
+                    new_scf_hratio,new_scf_nreads = new_ahr.reference_average_hratio(scf_id)
+                    pre_scf_hratio,pre_scf_nreads = scf_ahr[scf_id] if scf_id in scf_ahr else (1.0,0)
+                    if new_scf_hratio > pre_scf_hratio or (pre_scf_hratio-new_scf_hratio < 0.01*pre_scf_hratio):
+                        psc.remove_reference(scf_id)
+                        flt_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
+                        continue
+                    ret_fh.write(f'{scf_id}\t{pre_scf_hratio:.4f}\t{new_scf_hratio:.4f}\n')
 
         prev_ahr=new_ahr
         
