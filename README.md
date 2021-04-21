@@ -90,7 +90,7 @@ OUTPUT_DIR/
 Strainberry output assembly is stored in the `assembly.scaffolds.fa` file.
 A minimap2-based alignment of input reads on the output assembly is also available in the `assembly.scaffolds.bam` file.
 
-All sub-directories with prefix `strainberry_n{k}` contain intermediate results of Strainberry iterations and log files.
+All sub-directories named `strainberry_n{k}` contain intermediate results of Strainberry iterations and log files.
 After a successful run of Strainberry, they could be deleted.
 
 ## Example
