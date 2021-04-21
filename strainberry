@@ -33,7 +33,7 @@ def main(argv=None):
     required_args.add_argument('-o','--out-dir', dest='OUTDIR', metavar='PATH', required=True, help='Output directory of Strainberry assemblies')
     # OPTIONAL ARGUMENTS
     optional_args = parser.add_argument_group('Optional arguments')
-    optional_args.add_argument('--nanopore', dest='ONT', action='store_true', help='Input consists of Oxford Nanopore raw reads')
+    optional_args.add_argument('--nanopore', dest='ONT', action='store_true', help='Input consists of Oxford Nanopore reads')
     optional_args.add_argument('-n','--max-strains', dest='STRAINS', metavar='int', type=int, default=5, help='Attempt strain-separation at most for the provided strain multiplicity [%(default)s]')
     optional_args.add_argument('-s','--snv-density', dest='SNV_DENSITY', metavar='float', type=float, default=0.1, help='Minimum SNV percentage to consider haplotype blocks [%(default)s]')
     optional_args.add_argument('-c','--cpus', dest='CPUS', metavar='int', type=int, default=1, help='Maximum number of CPUs to be used [%(default)s]')
@@ -78,6 +78,8 @@ def main(argv=None):
     if not os.path.isdir(opt.OUTDIR):
         os.makedirs(opt.OUTDIR,exist_ok=True)
 
+    assembly_stats=[ faidx_stats(f'{opt.FASTA}.fai') ]
+
     nsep=2
     sep_hratio=1.0
     prev_ahr=None
@@ -107,18 +109,17 @@ def main(argv=None):
                 ref_hratio,ref_nreads = new_ahr.reference_average_hratio(ref_id)
                 ofh.write(f'{ref_id}\t{ref_hratio:.4f}\t{ref_nreads}\n')
 
-        print_status(f'hratio={new_hratio:.4f} |phasesets|={num_phasesets} nreads={nreads}')
+        #print_status(f'hratio={new_hratio:.4f} |phasesets|={num_phasesets} nreads={nreads}')
         if num_phasesets == 0:
-            print_status(f'no regions to separate')
-            print_status(f'best separation available at: {fastafile}')
+            print_status(f'no more regions to separate')
             break
 
         # check if current iteration improves average hamming ratio
         if nsep > 2 and (new_hratio > sep_hratio or (sep_hratio-new_hratio) < 0.01*sep_hratio):
-            print_status(f'average Hamming ratio did not improve enough: {sep_hratio:.4f} -> {new_hratio:.4f}')
-            print_status(f'best separation available at: {fastafile}')
+            print_status(f'average Hamming ratio did not improve enough: {new_hratio:.4f}')
             break
-        print_status(f'average Hamming ratio improved: {sep_hratio:.4f} -> {new_hratio:.4f}')
+
+        print_status(f'average Hamming ratio improved to {new_hratio:.4f}')
         sep_hratio=new_hratio
         
         # remove phasesets that would not improve hamming ratio of a reference sequence
@@ -170,12 +171,12 @@ def main(argv=None):
         wtdbg.run()
 
         # Scaffolding
+        print_status(f'scaffolding')
         contigfile=wtdbg.contig_file
         scaffolder = Scaffolder(contigfile,bamfile,out_dir,is_ont=opt.ONT,nproc=opt.CPUS)
         if not scaffolder.run():
             print_error(f'scaffolding failed')
             return 2
-        print_status(f'scaffold file created at: {scaffolder.scaffold_file}')
         
         # Map input reads to current strain-aware scaffolds
         print_status('mapping reads to strain-separated scaffolds')
@@ -204,6 +205,7 @@ def main(argv=None):
             print_error(f'failed to create index for {fastafile}')
             return 2
 
+        assembly_stats.append(faidx_stats(f'{fastafile}.fai'))
         nsep+=1
 
     # no more iterations to perform: move last separation in the main output directory
@@ -216,6 +218,29 @@ def main(argv=None):
         os.rename(f'{bamfile}.bai',os.path.join(opt.OUTDIR,f'{bamname}.bai'))
 
     print_status('Strainberry finished successfully')
+    print_status(f'Output strain-separated assembly available at: ' + os.path.join(opt.OUTDIR,f'{fastaname}'))
+    
+    eprint(f'\n# Assembly statistics:')
+    for i,asmstats in enumerate(assembly_stats):
+        asm_len,asm_nseq,asm_n50=asmstats
+        if i==0:
+            eprint(f'\n  - Input assembly [{opt.FASTA}]')
+            eprint(f'    Sequences: {asm_nseq}')
+            eprint(f'    Length:    {asm_len} bp')
+            eprint(f'    N50:       {asm_n50} bp')
+        elif i==len(assembly_stats)-1:
+            assembly_file = os.path.join(opt.OUTDIR,fastaname)
+            eprint(f'\n  - Final iteration ({i+1}-strain separation) [{assembly_file}]')
+            eprint(f'    Sequences: {asm_nseq}')
+            eprint(f'    Length:    {asm_len} bp')
+            eprint(f'    N50:       {asm_n50} bp')
+        else:
+            assembly_file = os.path.join(opt.OUTDIR,f'strainberry_n{i+1}','assembly.scaffolds.fa')
+            eprint(f'\n  - Iteration #{i} ({i+1}-strain separation) [{assembly_file}]')
+            eprint(f'    Sequences: {asm_nseq}')
+            eprint(f'    Length:    {asm_len} bp')
+            eprint(f'    N50:       {asm_n50} bp')
+
     return 0
 
 
