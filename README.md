@@ -20,9 +20,6 @@ Strainberry has been developed and tested under a Linux environment.
 It requires certain packages/tools in order to be installed/used: 
 + GNU bash (version 4 or later recommended)
 + [miniconda3](https://conda.io/en/latest/miniconda.html)
-+ Standard development packages with a GCC version supporting C++11:
-    - Debian/Ubuntu: `build-essential` and `python3-dev`
-    - RedHat/CentOS/Fedora: `gcc`, `gcc-c++`, `glibc-devel`, `make`, and `python3-devel`
 
 ## Installation
 
