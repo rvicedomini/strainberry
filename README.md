@@ -25,7 +25,7 @@ It requires certain packages/tools in order to be installed/used:
 
 ## Installation
 
-The simplest (and recommended) way to install Strainberry dependencies is to create an isolated conda environment (*e.g.*, named `sberry`):
+The simplest (and recommended) way to install Strainberry dependencies is through [conda](https://conda.io/en/latest/miniconda.html) in an isolated environment (*e.g.*, named `sberry`):
 ```bash
 git clone https://github.com/rvicedomini/strainberry.git
 cd strainberry
