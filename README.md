@@ -153,8 +153,7 @@ Other arguments:
 
 ## Reference
 
-A manuscript presenting Strainberry has been submitted and is currently under review.
-A pre-print is available on bioRxiv:
+A pre-print of Strainberry's manuscript is currently available on bioRxiv:
 
 R. Vicedomini, C. Quince, A. E. Darling, R. Chikhi, 
 "Automated strain separation in low-complexity metagenomes using long reads."
