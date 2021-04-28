@@ -4,17 +4,9 @@ on:
   push:
     branches:
       - master
-    paths:
-      - '!images/**'
-      - '!LICENSE'
-      - '!README.md'
   pull_request:
     branches:
       - master
-    paths:
-      - '!images/**'
-      - '!LICENSE'
-      - '!README.md'
 
 jobs:
   
