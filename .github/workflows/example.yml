@@ -17,9 +17,9 @@ on:
       - '!README.md'
 
 jobs:
-  name: Example (${{ matrix.os }})
   
   example:
+    name: Example (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
 
     strategy:
