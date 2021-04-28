@@ -13,10 +13,8 @@ from sberry.assemble import WtdbgAssembler
 from sberry.scaffolder import Scaffolder
 from sberry.__version__ import __version__
 
-
 sberry_root = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
 sberry_scripts = os.path.join(sberry_root,'sberry')
-
 
 def _version():
     sberry_version = f'{__version__}'
