@@ -11,12 +11,12 @@ on:
 jobs:
   
   example:
-    name: Example (${{ matrix.os }})
+    name: Strainberry Example (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        os: [ "ubuntu-20.04" ] #, "ubuntu-18.04", "ubuntu-16.04" ]
+        os: [ "ubuntu-latest", "ubuntu-18.04", "ubuntu-16.04" ]
 
     defaults:
       run:
@@ -35,9 +35,9 @@ jobs:
         run: conda list
       - name: Environment
         run: printenv | sort
-      - name: Strainberry Example
+      - name: Strainberry
         run: ../strainberry -r assembly.fasta -b alignment.sorted.bam -o sberry_out
         working-directory: ./example
-      - name: Clean output directory
+      - name: Remove output directory
         run: rm -rf sberry_out
         working-directory: ./example
