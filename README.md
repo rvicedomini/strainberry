@@ -42,7 +42,6 @@ export PATH=/absolute/path/to/strainberry:${PATH}
 ### Updating to the latest version
 
 Assuming Strainberry conda environment has `sberry` name, the following commands allow to update Strainberry to the latest (development) version.
-The `git pull` command is needed only if Strainberry has been cloned from the git repository.
 ```bash
 cd strainberry
 git pull
