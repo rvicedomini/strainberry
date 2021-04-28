@@ -4,15 +4,17 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
+    paths-ignore:
+      - 'images/**'
+      - '**/LICENSE'
+      - '**/README.md'
 
 jobs:
   
   example:
     name: Strainberry Example (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
 
     strategy:
       matrix:
