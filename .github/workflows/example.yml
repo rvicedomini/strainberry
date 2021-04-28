@@ -1,0 +1,51 @@
+name: Strainberry example
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '!images/**'
+      - '!LICENSE'
+      - '!README.md'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '!images/**'
+      - '!LICENSE'
+      - '!README.md'
+
+jobs:
+  name: Example (${{ matrix.os }})
+  
+  example:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ "ubuntu-20.04" ] #, "ubuntu-18.04", "ubuntu-16.04" ]
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: sberry
+          environment-file: environment.yml
+          auto-activate-base: false
+      - name: Conda info
+        run: conda info
+      - name: Conda list
+        run: conda list
+      - name: Environment
+        run: printenv | sort
+      - name: Strainberry Example
+        run: ../strainberry -r assembly.fasta -b alignment.sorted.bam -o sberry_out
+        working-directory: ./example
+      - name: Clean output directory
+        run: rm -rf sberry_out
+        working-directory: ./example
