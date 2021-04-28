@@ -1,5 +1,7 @@
 ![Strainberry logo](https://github.com/rvicedomini/strainberry/raw/master/images/sberry-logo_590x142.png)
 
+[![Strainberry Example](https://github.com/rvicedomini/strainberry/actions/workflows/example.yml/badge.svg?branch=master)](https://github.com/rvicedomini/strainberry/actions/workflows/example.yml)
+
 # Automated strain separation of low-complexity metagenomes
 
 Strainberry is a method that performs strain separation in low-complexity metagenomes using error-prone long-read technologies. 
