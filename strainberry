@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-import sys,os,argparse,subprocess
+import os
+import sys
+import argparse
+import subprocess
 
 from sberry.utils import *
 from sberry.separate import LongshotReadSeparator
