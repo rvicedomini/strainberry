@@ -135,7 +135,7 @@ Required arguments:
                         Output directory of Strainberry assemblies
 
 Optional arguments:
-  --nanopore            Input consists of Oxford Nanopore raw reads
+  --nanopore            Input consists of Oxford Nanopore reads
   -n int, --max-strains int
                         Attempt strain-separation at most for the provided
                         strain multiplicity [5]
