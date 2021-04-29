@@ -154,7 +154,7 @@ Other arguments:
 
 ## Reference
 
-A pre-print of Strainberry's manuscript is currently available on bioRxiv:
+A pre-print of Strainberry's manuscript is currently available on bioRxiv. If you use Strainberry, please cite:
 
 R. Vicedomini, C. Quince, A. E. Darling, R. Chikhi, 
 "Automated strain separation in low-complexity metagenomes using long reads."
