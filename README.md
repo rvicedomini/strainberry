@@ -1,6 +1,7 @@
 ![Strainberry logo](https://github.com/rvicedomini/strainberry/raw/master/images/sberry-logo_590x142.png)
 
 [![License: MIT](https://img.shields.io/github/license/rvicedomini/strainberry)](https://github.com/rvicedomini/strainberry/blob/master/LICENSE)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/rvicedomini/strainberry)
 [![Strainberry Example](https://github.com/rvicedomini/strainberry/actions/workflows/example.yml/badge.svg?branch=master)](https://github.com/rvicedomini/strainberry/actions/workflows/example.yml)
 
 # Automated strain separation of low-complexity metagenomes
