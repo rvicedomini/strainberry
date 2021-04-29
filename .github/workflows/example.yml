@@ -1,4 +1,4 @@
-name: Strainberry Example
+name: Strainberry CI
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
 jobs:
   
   example:
-    name: Strainberry Example (${{ matrix.os }})
+    name: Test Example (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
@@ -37,7 +37,7 @@ jobs:
         run: conda list
       - name: Environment
         run: printenv | sort
-      - name: Strainberry
+      - name: Strainberry - Test Example
         run: ../strainberry -r assembly.fasta -b alignment.sorted.bam -o sberry_out
         working-directory: ./example
       - name: Remove output directory
