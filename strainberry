@@ -216,9 +216,9 @@ def main(argv=None):
         _,bamname=os.path.split(bamfile)
         os.rename(bamfile,os.path.join(opt.OUTDIR,bamname))
         os.rename(f'{bamfile}.bai',os.path.join(opt.OUTDIR,f'{bamname}.bai'))
+        print_status('Output strain-separated assembly available at: ' + os.path.join(opt.OUTDIR,f'{fastaname}'))
 
     print_status('Strainberry finished successfully')
-    print_status('Output strain-separated assembly available at: ' + os.path.join(opt.OUTDIR,f'{fastaname}'))
 
     eprint('\n# Assembly statistics:')
     for i,asmstats in enumerate(assembly_stats):
