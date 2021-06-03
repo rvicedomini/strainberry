@@ -15,5 +15,4 @@ dependencies:
   - pysam==0.16.0.1
   - python==3.7.9
   - pyvcf==0.6.8
-  - vcflib==1.0.1
   - wtdbg==2.5
