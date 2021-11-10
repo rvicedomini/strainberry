@@ -154,9 +154,8 @@ Other arguments:
 
 ## Reference
 
-A pre-print of Strainberry's manuscript is currently available on bioRxiv. If you use Strainberry, please cite:
+If you use Strainberry in your work, please cite:
 
-R. Vicedomini, C. Quince, A. E. Darling, R. Chikhi, 
-"Automated strain separation in low-complexity metagenomes using long reads."
-*bioRxiv*, 2021. [https://doi.org/10.1101/2021.02.24.429166](https://doi.org/10.1101/2021.02.24.429166)
-
+> R. Vicedomini, C. Quince, A. E. Darling, R. Chikhi, 
+> **Strainberry: automated strain separation in low-complexity metagenomes using long reads**, 
+> *Nature Communications* (2021). doi: [10.1038/s41467-021-24515-9](https://doi.org/10.1038/s41467-021-24515-9)
